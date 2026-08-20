@@ -1,0 +1,134 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  agents    Agent[]
+  assets    Asset[]
+  policies  Policy[]
+  incidents Incident[]
+  auditLogs AuditLog[]
+}
+
+model User {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email       String
+  displayName String
+  role        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignedIncidents Incident[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+model Agent {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId    String
+  siteId     String
+  mode       String    @default("site")
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  assets Asset[]
+
+  @@unique([tenantId, agentId])
+  @@index([tenantId])
+  @@index([siteId])
+}
+
+model Asset {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId   String?
+  agent     Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  assetKey  String
+  assetType String?
+  vendor    String?
+  status    String   @default("known")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  incidents Incident[]
+
+  @@unique([tenantId, assetKey])
+  @@index([tenantId])
+  @@index([agentId])
+}
+
+model Policy {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  kind      String
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model Incident {
+  id         String         @id @default(cuid())
+  tenantId   String
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assetId    String?
+  asset      Asset?         @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  assigneeId String?
+  assignee   User?          @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  title      String
+  status     IncidentStatus @default(open)
+  severity   String
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([assetId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor     String
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+enum IncidentStatus {
+  open
+  acknowledged
+  resolved
+  closed
+}

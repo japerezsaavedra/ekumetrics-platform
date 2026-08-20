@@ -1,0 +1,11 @@
+<div class="shell">
+  <header class="shell__header">
+    <a class="shell__brand" routerLink="/">Ekumetrics</a>
+    <nav class="shell__nav">
+      <a routerLink="/" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }">Inicio</a>
+    </nav>
+  </header>
+  <main class="shell__main">
+    <router-outlet />
+  </main>
+</div>

@@ -1,0 +1,38 @@
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background: #3a3c40;
+  color: #dfe4ec;
+}
+
+.shell__brand {
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.shell__nav a {
+  color: #dfe4ec;
+  text-decoration: none;
+  margin-left: 1rem;
+}
+
+.shell__nav a.is-active {
+  color: #ffffff;
+  border-bottom: 2px solid #441be4;
+  padding-bottom: 0.15rem;
+}
+
+.shell__main {
+  flex: 1;
+  padding: 1.5rem;
+}

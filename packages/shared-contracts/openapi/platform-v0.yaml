@@ -1,0 +1,105 @@
+openapi: 3.1.0
+info:
+  title: Ekumetrics Platform API
+  version: 0.0.1
+  description: Contrato v0. Los eventos del agente usan /v1/ekms/events, no /events.
+servers:
+  - url: http://localhost:3000
+paths:
+  /health:
+    get:
+      summary: Liveness
+      operationId: getHealth
+      responses:
+        "200":
+          description: Servicio vivo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /health/ready:
+    get:
+      summary: Readiness (PostgreSQL)
+      operationId: getReady
+      responses:
+        "200":
+          description: Base de datos alcanzable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+        "503":
+          description: Base de datos no disponible
+  /v1/ekms/events:
+    post:
+      summary: Ingesta de envelope del agente (Fase 1)
+      operationId: ingestEkmsEvents
+      description: >
+        Array JSON de envelope.Event. Content-Encoding gzip opcional.
+        El agente deriva esta URL desde export.otlp.endpoint (puerto 4318).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/EkmsEvent"
+      responses:
+        "202":
+          description: Lote aceptado (pendiente de implementar)
+        "400":
+          description: Envelope inválido
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+    EkmsEvent:
+      type: object
+      required: [timestamp, tenant_id, site_id, agent_id, signal, source]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        tenant_id:
+          type: string
+        site_id:
+          type: string
+        agent_id:
+          type: string
+        asset_id:
+          type: string
+        asset_type:
+          type: string
+        vendor:
+          type: string
+        tier:
+          type: integer
+        signal:
+          type: string
+          enum:
+            - asset_discovered
+            - asset_updated
+            - asset_stale
+            - mac_changed
+            - flow.bytes
+            - flow.new
+            - snmp.trap
+        value:
+          type: number
+        unit:
+          type: string
+        severity:
+          type: string
+        source:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string

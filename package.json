@@ -1,0 +1,16 @@
+{
+  "name": "ekumetrics-platform",
+  "private": true,
+  "description": "Ekumetrics Platform — plano de control, portal e ingesta del agente",
+  "scripts": {
+    "lab:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
+    "lab:down": "docker compose -f infrastructure/docker/docker-compose.yml down",
+    "lab:logs": "docker compose -f infrastructure/docker/docker-compose.yml logs -f",
+    "api:dev": "npm --prefix apps/platform-api run start:dev",
+    "api:test": "npm --prefix apps/platform-api test",
+    "portal:dev": "npm --prefix apps/portal-web start -- --host 127.0.0.1 --port 4200",
+    "portal:test": "npm --prefix apps/portal-web test",
+    "db:generate": "npm --prefix apps/platform-api run prisma:generate",
+    "db:migrate": "npm --prefix apps/platform-api run prisma:migrate"
+  }
+}

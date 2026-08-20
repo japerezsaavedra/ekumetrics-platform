@@ -1,0 +1,19 @@
+<section class="home">
+  <p class="home__eyebrow">Plataforma de observabilidad</p>
+  <h1>Ekumetrics</h1>
+  <p class="home__lead">
+    Plano de control para inventario, incidentes y telemetría del agente.
+    Esta es la Fase 0: laboratorio y esqueletos.
+  </p>
+
+  <article class="home__card">
+    <h2>Estado de la API</h2>
+    @if (health(); as status) {
+      <p>Servicio {{ status.service }}: {{ status.status }}</p>
+    }
+    @if (error(); as message) {
+      <p class="home__error">{{ message }}</p>
+    }
+    <p class="home__meta">{{ apiUrl }}/health</p>
+  </article>
+</section>

@@ -1,0 +1,107 @@
+name: ekumetrics-lab
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ekumetrics-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ekumetrics
+      POSTGRES_PASSWORD: ekumetrics
+      POSTGRES_DB: ekumetrics
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ekumetrics -d ekumetrics"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  nats:
+    image: nats:2.11-alpine
+    container_name: ekumetrics-nats
+    restart: unless-stopped
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    container_name: ekumetrics-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  loki:
+    image: grafana/loki:3.4.3
+    container_name: ekumetrics-loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "3100:3100"
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: ekumetrics-alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+
+  grafana:
+    image: grafana/grafana:12.0.2
+    container_name: ekumetrics-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ekumetrics
+      GF_SECURITY_ADMIN_PASSWORD: ekumetrics
+      GF_USERS_DEFAULT_THEME: light
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.128.0
+    container_name: ekumetrics-otel
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./otel/config.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      - prometheus
+      - loki
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3
+    container_name: ekumetrics-keycloak
+    profiles: ["iam"]
+    command: ["start-dev"]
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ekumetrics
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres-data:
+  prometheus-data:
+  grafana-data:

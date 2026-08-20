@@ -1,0 +1,6 @@
+{
+  "name": "@ekumetrics/shared-contracts",
+  "version": "0.0.1",
+  "private": true,
+  "description": "OpenAPI y tipos compartidos entre platform-api y portal-web"
+}

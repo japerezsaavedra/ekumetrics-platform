@@ -1,0 +1,13 @@
+:root {
+  color: #3a3c40;
+  background: #ffffff;
+  font-family: "IBM Plex Sans", "Open Sans", "Helvetica Neue", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}

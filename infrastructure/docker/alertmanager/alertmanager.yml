@@ -1,0 +1,7 @@
+route:
+  receiver: lab
+  group_wait: 10s
+  group_interval: 1m
+
+receivers:
+  - name: lab
