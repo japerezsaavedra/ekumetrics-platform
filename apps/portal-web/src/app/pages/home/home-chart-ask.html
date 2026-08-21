@@ -1,0 +1,18 @@
+<button
+  type="button"
+  class="home-chart-ask__btn"
+  [matTooltip]="hint()"
+  matTooltipClass="eku-hint-tooltip"
+  matTooltipPosition="above"
+>
+  <mat-icon>help_outline</mat-icon>
+</button>
+<a
+  class="home-chart-ask__btn"
+  routerLink="/asistente"
+  [queryParams]="{ q: question() }"
+  matTooltip="Preguntar a EkuAssistant"
+  matTooltipPosition="above"
+>
+  <mat-icon>smart_toy</mat-icon>
+</a>

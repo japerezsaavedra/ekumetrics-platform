@@ -1,0 +1,24 @@
+// Reserva para Apache ECharts. Los graficos nativos deben leer estos tokens.
+:root,
+.eku-theme-light,
+.eku-theme-dark {
+  --eku-chart-grid: var(--eku-border);
+  --eku-chart-axis: var(--eku-text-secondary);
+  --eku-chart-label: var(--eku-text-primary);
+  --eku-chart-series: var(--eku-primary);
+  --eku-chart-series-alt: var(--eku-accent);
+  --eku-chart-series-soft: var(--eku-info);
+  --eku-chart-2: var(--eku-info);
+  --eku-chart-3: var(--eku-accent);
+  --eku-chart-4: var(--eku-healthy);
+  --eku-chart-5: var(--eku-warning);
+  --eku-chart-6: var(--eku-text-secondary);
+  --eku-chart-tooltip-surface: var(--eku-surface-elevated);
+  --eku-chart-tooltip-text: var(--eku-text-primary);
+}
+
+.eku-hint-tooltip {
+  max-width: 22rem;
+  white-space: normal;
+  line-height: 1.4;
+}

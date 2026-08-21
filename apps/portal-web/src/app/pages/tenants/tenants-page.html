@@ -1,0 +1,84 @@
+<section class="tenants">
+  <eku-page-header
+    title="Tenants"
+    subtitle="Gradotech crea el tenant, el dominio corporativo y el primer administrador. Los sitios los gestiona el admin de ese tenant."
+  >
+    @if (isOperator()) {
+      <button ekuActions type="button" class="eku-add" (click)="toggleForm()">
+        {{ formOpen() ? 'Cancelar' : 'Agregar tenant' }}
+      </button>
+    }
+  </eku-page-header>
+
+  @if (isOperator() && formOpen()) {
+    <form class="eku-form" [formGroup]="form" (ngSubmit)="submit()">
+      <label class="eku-field">
+        <span>Nombre</span>
+        <input type="text" formControlName="name" placeholder="Cliente Norte" />
+        <small>{{ fieldInvalid('name') ? 'Indique el nombre del tenant.' : '' }}</small>
+      </label>
+      <label class="eku-field">
+        <span>Slug (tenantId del agente)</span>
+        <input type="text" formControlName="slug" placeholder="cliente-norte" />
+        <small>{{ fieldInvalid('slug') ? 'Solo minusculas, numeros, punto, guion o _.' : '' }}</small>
+      </label>
+      <label class="eku-field">
+        <span>Dominio corporativo</span>
+        <input type="text" formControlName="emailDomain" placeholder="norte.cl" />
+        <small>{{ fieldInvalid('emailDomain') ? 'Ejemplo: cliente.com. Sin @ ni espacios.' : '' }}</small>
+      </label>
+      <label class="eku-field">
+        <span>Administrador</span>
+        <input type="text" formControlName="adminName" placeholder="Ana Perez" />
+        <small>{{ fieldInvalid('adminName') ? 'Indique el nombre del administrador.' : '' }}</small>
+      </label>
+      <label class="eku-field">
+        <span>Correo del administrador</span>
+        <input type="email" formControlName="adminEmail" [placeholder]="'ana' + domainHint()" />
+        <small>
+          @if (emailDomainInvalid()) {
+            Debe terminar en {{ domainHint() }}.
+          } @else if (fieldInvalid('adminEmail')) {
+            Indique un correo valido.
+          }
+        </small>
+      </label>
+      <label class="eku-field">
+        <span>Primer sitio</span>
+        <input type="text" formControlName="siteName" placeholder="Sede principal" />
+        <small>{{ fieldInvalid('siteName') ? 'Indique el nombre del sitio.' : '' }}</small>
+      </label>
+      <label class="eku-field">
+        <span>Slug del sitio (agent.site)</span>
+        <input type="text" formControlName="siteSlug" placeholder="local" />
+        <small>{{ fieldInvalid('siteSlug') ? 'Solo minusculas, numeros, punto, guion o _.' : '' }}</small>
+      </label>
+      <button type="submit" [disabled]="saving()">
+        {{ saving() ? 'Creando…' : 'Crear tenant y administrador' }}
+      </button>
+    </form>
+  } @else if (!isOperator()) {
+    <p class="tenants__hint">
+      Cambie el selector a Gradotech (default) para crear tenants. Los sitios de este tenant se administran en Sitios.
+    </p>
+  }
+
+  @if (error(); as message) {
+    <eku-error-state [message]="message" />
+  }
+
+  <div class="tenants__list">
+    @for (item of items(); track item.id) {
+      <article class="tenants__card">
+        <header>
+          <strong>{{ item.name }}</strong>
+          <span>{{ item.slug }}</span>
+        </header>
+        <p>{{ item.emailDomain ? '@' + item.emailDomain : 'Sin dominio' }}</p>
+        <p>{{ adminLabel(item) }}</p>
+        <p>{{ item._count?.sites ?? item.sites?.length ?? 0 }} sitios · {{ item._count?.agents ?? 0 }} agentes</p>
+        <button type="button" (click)="useTenant(item.slug)">Usar este tenant</button>
+      </article>
+    }
+  </div>
+</section>

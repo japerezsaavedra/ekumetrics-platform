@@ -1,0 +1,51 @@
+.eku-theme-dark {
+  --eku-surface: var(--eku-ref-dark-surface);
+  --eku-surface-container: var(--eku-ref-dark-container);
+  --eku-surface-elevated: var(--eku-ref-dark-elevated);
+  --eku-border: color-mix(in srgb, var(--eku-ref-mist) 14%, transparent);
+  --eku-text-primary: var(--eku-ref-dark-text);
+  --eku-text-secondary: var(--eku-ref-dark-muted);
+  --eku-primary: var(--eku-ref-primary-soft);
+  --eku-on-primary: var(--eku-ref-dark-on-primary);
+  --eku-accent: var(--eku-ref-dark-accent);
+  --eku-healthy: var(--eku-ref-dark-healthy);
+  --eku-warning: var(--eku-ref-dark-warning);
+  --eku-degraded: var(--eku-ref-dark-degraded);
+  --eku-critical: var(--eku-ref-dark-critical);
+  --eku-info: var(--eku-ref-dark-info);
+  --eku-unknown: var(--eku-ref-dark-muted);
+  --eku-maintenance: var(--eku-ref-dark-accent);
+  --eku-elevation: 0 1px 2px color-mix(in srgb, var(--eku-ref-black) 28%, transparent),
+    0 12px 32px color-mix(in srgb, var(--eku-ref-black) 32%, transparent);
+  --eku-nav-elevation: 0 2px 10px color-mix(in srgb, var(--eku-ref-black) 42%, transparent);
+  --eku-aside-elevation: 2px 0 10px color-mix(in srgb, var(--eku-ref-black) 32%, transparent);
+  --eku-nav-surface: var(--eku-ref-dark-nav);
+  --eku-nav-on-surface: var(--eku-ref-dark-text);
+  --eku-primary-muted: color-mix(in srgb, var(--eku-primary) 16%, transparent);
+  --eku-aside-border: color-mix(in srgb, var(--eku-ref-mist) 22%, transparent);
+  --eku-aside-hover: color-mix(in srgb, var(--eku-primary) 14%, var(--eku-surface));
+
+  --mat-sys-primary: var(--eku-primary);
+  --mat-sys-on-primary: var(--eku-on-primary);
+  --mat-sys-primary-container: color-mix(in srgb, var(--eku-primary) 18%, var(--eku-surface));
+  --mat-sys-on-primary-container: var(--eku-text-primary);
+  --mat-sys-secondary: var(--eku-accent);
+  --mat-sys-on-secondary: var(--eku-on-primary);
+  --mat-sys-surface: var(--eku-surface);
+  --mat-sys-surface-container: var(--eku-surface-elevated);
+  --mat-sys-surface-container-low: var(--eku-surface-container);
+  --mat-sys-surface-container-highest: var(--eku-surface-elevated);
+  --mat-sys-on-surface: var(--eku-text-primary);
+  --mat-sys-on-surface-variant: var(--eku-text-secondary);
+  --mat-sys-outline: color-mix(in srgb, var(--eku-text-primary) 28%, transparent);
+  --mat-sys-outline-variant: var(--eku-border);
+  --mat-sys-error: var(--eku-critical);
+  --mat-sys-corner-extra-small: 0;
+  --mat-sys-corner-small: 0;
+  --mat-sys-corner-medium: 0;
+  --mat-sys-corner-large: 0;
+  --mat-sys-corner-extra-large: 0;
+  --mat-sys-corner-full: 0;
+  --mat-sys-level1: var(--eku-elevation);
+  --mat-sys-level2: var(--eku-elevation);
+}

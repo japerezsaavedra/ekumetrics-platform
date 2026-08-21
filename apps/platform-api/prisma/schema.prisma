@@ -9,18 +9,33 @@ datasource db {
 }
 
 model Tenant {
-  id        String   @id @default(cuid())
-  slug      String   @unique
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  emailDomain String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   users     User[]
+  sites     Site[]
   agents    Agent[]
   assets    Asset[]
   policies  Policy[]
   incidents Incident[]
   auditLogs AuditLog[]
+}
+
+model Site {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  slug      String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
 }
 
 model User {
@@ -124,6 +139,33 @@ model AuditLog {
 
   @@index([tenantId])
   @@index([createdAt])
+}
+
+model AiInquiry {
+  id        String   @id @default(cuid())
+  provider  String
+  model     String
+  question  String
+  analysis  String
+  evidence  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([provider])
+}
+
+model AiSettings {
+  id        String   @id @default(cuid())
+  slot      String   @unique @default("default")
+  service   String
+  model     String
+  apiKey    String?
+  baseUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slot])
 }
 
 enum IncidentStatus {

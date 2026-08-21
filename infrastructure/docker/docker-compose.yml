@@ -66,11 +66,14 @@ services:
       GF_SECURITY_ADMIN_USER: ekumetrics
       GF_SECURITY_ADMIN_PASSWORD: ekumetrics
       GF_USERS_DEFAULT_THEME: light
-      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
     ports:
       - "3001:3000"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
@@ -101,7 +104,46 @@ services:
     ports:
       - "8080:8080"
 
+  holmes:
+    image: us-central1-docker.pkg.dev/genuine-flight-317411/devel/holmes
+    container_name: ekumetrics-holmes
+    profiles: ["ai"]
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "5050:5050"
+    env_file:
+      - ../../apps/platform-api/.env
+    environment:
+      OPENAI_API_BASE: http://host.docker.internal:3000/v1/ai/upstream
+      OPENAI_API_KEY: holmes-local
+    volumes:
+      - ./holmes:/root/.holmes:ro
+    working_dir: /app
+    entrypoint: ["python", "-u", "server.py"]
+    depends_on:
+      - prometheus
+      - loki
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5050/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  ollama:
+    image: ollama/ollama:0.11.4
+    container_name: ekumetrics-ollama
+    profiles: ["ai-ollama"]
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+
 volumes:
   postgres-data:
   prometheus-data:
   grafana-data:
+  ollama-data:

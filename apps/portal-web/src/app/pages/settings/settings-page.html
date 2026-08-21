@@ -1,0 +1,76 @@
+<section class="settings">
+  <eku-page-header
+    title="Modelos de IA"
+    subtitle="Servicio y modelo que usara EkuAssistant AI. La clave no se vuelve a mostrar."
+  />
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>Modelo de IA</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <form class="settings__form" [formGroup]="form" (ngSubmit)="submit()">
+        <mat-form-field appearance="outline">
+          <mat-label>Servicio</mat-label>
+          <mat-select formControlName="service">
+            @for (item of catalog(); track item.id) {
+              <mat-option [value]="item.id">{{ item.label }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Modelo</mat-label>
+          <input matInput formControlName="model" list="settings-models" />
+          <datalist id="settings-models">
+            @for (item of selectedService()?.models ?? []; track item) {
+              <option [value]="item"></option>
+            }
+          </datalist>
+          @if (fieldInvalid('model')) {
+            <mat-hint>Indique el modelo a utilizar.</mat-hint>
+          }
+        </mat-form-field>
+
+        @if (selectedService()?.needsKey) {
+          <mat-form-field appearance="outline">
+            <mat-label>Clave API</mat-label>
+            <input
+              matInput
+              type="password"
+              formControlName="apiKey"
+              autocomplete="off"
+              [placeholder]="hasSavedKey() ? 'Dejar en blanco para conservar la clave' : 'sk-...'"
+            />
+          </mat-form-field>
+        }
+
+        @if (selectedService()?.needsBaseUrl) {
+          <mat-form-field appearance="outline">
+            <mat-label>URL base</mat-label>
+            <input matInput type="url" formControlName="baseUrl" />
+          </mat-form-field>
+        }
+
+        @if (selectedService(); as current) {
+          <p class="settings__hint">{{ current.hint }}</p>
+        }
+
+        <button mat-flat-button type="submit" [disabled]="loading()">
+          @if (loading()) {
+            Guardando…
+          } @else {
+            Guardar
+          }
+        </button>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  @if (saved()) {
+    <p class="settings__ok">Configuracion guardada. EkuAssistant AI usara este modelo.</p>
+  }
+  @if (error(); as message) {
+    <eku-error-state [message]="message" />
+  }
+</section>

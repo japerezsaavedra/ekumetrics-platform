@@ -1,0 +1,90 @@
+<section class="admin-sites">
+  <eku-page-header
+    title="Sitios"
+    [subtitle]="'El administrador de ' + tenantSlug() + ' separa sedes. El agent.site del YAML debe coincidir con el slug.'"
+  >
+    <div ekuActions class="admin-sites__actions">
+      <button type="button" class="eku-add" (click)="toggleSite()">
+        {{ siteOpen() ? 'Cancelar' : 'Agregar sitio' }}
+      </button>
+      <button type="button" class="eku-add" (click)="toggleAgent()">
+        {{ agentOpen() ? 'Cancelar' : 'Agregar agente' }}
+      </button>
+    </div>
+  </eku-page-header>
+
+  @if (siteOpen()) {
+    <form class="eku-form" [formGroup]="siteForm" (ngSubmit)="submitSite()">
+      <label class="eku-field">
+        <span>Nombre</span>
+        <input type="text" formControlName="name" placeholder="Planta Norte" />
+        <small>{{ fieldInvalid('site', 'name') ? 'Indique el nombre del sitio.' : '' }}</small>
+      </label>
+      <label class="eku-field">
+        <span>Slug (agent.site)</span>
+        <input type="text" formControlName="slug" placeholder="planta-norte" />
+        <small>{{ fieldInvalid('site', 'slug') ? 'Solo minusculas, numeros, punto, guion o _.' : '' }}</small>
+      </label>
+      <button type="submit" [disabled]="saving()">
+        {{ saving() ? 'Creando…' : 'Crear sitio' }}
+      </button>
+    </form>
+  }
+
+  @if (agentOpen()) {
+    <form class="eku-form" [formGroup]="agentForm" (ngSubmit)="submitAgent()">
+      <label class="eku-field">
+        <span>agentId</span>
+        <input type="text" formControlName="agentId" placeholder="agent-planta-norte-01" />
+        <small>{{ fieldInvalid('agent', 'agentId') ? 'Obligatorio. Letras, numeros, punto, guion o _.' : '' }}</small>
+      </label>
+      <label class="eku-field">
+        <span>Sitio</span>
+        <select formControlName="siteId">
+          @for (item of items(); track item.id) {
+            <option [value]="item.slug">{{ item.name }} ({{ item.slug }})</option>
+          }
+        </select>
+        <small>{{ fieldInvalid('agent', 'siteId') ? 'Seleccione un sitio.' : '' }}</small>
+      </label>
+      <label class="eku-field">
+        <span>Modo</span>
+        <select formControlName="mode">
+          <option value="site">site</option>
+          <option value="central">central</option>
+          <option value="sensor">sensor</option>
+          <option value="endpoint">endpoint</option>
+        </select>
+        <small></small>
+      </label>
+      <button type="submit" [disabled]="saving()">
+        {{ saving() ? 'Agregando…' : 'Agregar agente' }}
+      </button>
+    </form>
+  }
+
+  @if (error(); as message) {
+    <eku-error-state [message]="message" />
+  }
+
+  @if (enrolled(); as item) {
+    <article class="admin-sites__yaml">
+      <p>Pegue esto en /etc/ekumetrics-agent/agent.yaml y reinicie el servicio.</p>
+      <pre>{{ item.yaml }}</pre>
+    </article>
+  }
+
+  <div class="admin-sites__list">
+    @for (item of items(); track item.id) {
+      <article class="admin-sites__card">
+        <header>
+          <strong>{{ item.name }}</strong>
+          <span>{{ item.slug }}</span>
+        </header>
+        <p>{{ item.agentCount ?? 0 }} agentes</p>
+      </article>
+    } @empty {
+      <p class="admin-sites__hint">Este tenant aun no tiene sitios. Agregue el primero.</p>
+    }
+  </div>
+</section>

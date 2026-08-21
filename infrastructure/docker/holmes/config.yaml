@@ -1,0 +1,25 @@
+# HolmesGPT habla con platform-api. El modelo real (Grok, Ollama, etc.)
+# se elige en /configuracion y se guarda en PostgreSQL.
+# Metricas las resuelve platform-api. Holmes investiga y explica.
+model: openai/qwen2.5:14b
+max_steps: 8
+
+toolsets:
+  kubernetes/core:
+    enabled: false
+  kubernetes/logs:
+    enabled: false
+  bash:
+    enabled: false
+  helm:
+    enabled: false
+  docker:
+    enabled: false
+  kubectl-run:
+    enabled: false
+  prometheus/metrics:
+    enabled: false
+  grafana/loki:
+    enabled: true
+    config:
+      api_url: http://loki:3100

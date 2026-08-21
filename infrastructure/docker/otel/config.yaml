@@ -8,6 +8,35 @@ receivers:
 
 processors:
   batch: {}
+  # El input journald relee el stdout de Fluent Bit (HTTP 200 cada flush).
+  filter/fluentbit_echo:
+    error_mode: ignore
+    logs:
+      log_record:
+        - 'IsMap(body) and IsMatch(body["MESSAGE"], "\\[fluentbit\\]")'
+        - 'IsString(body) and IsMatch(body, "\\[fluentbit\\]")'
+  # El agente envia agent.id / tenant.id / host.site como recurso OTLP.
+  # Prometheus no copia recursos a labels salvo que se promuevan aqui.
+  transform/metrics:
+    error_mode: ignore
+    metric_statements:
+      - context: datapoint
+        statements:
+          - set(attributes["agent_id"], resource.attributes["agent.id"]) where resource.attributes["agent.id"] != nil
+          - set(attributes["tenant_id"], resource.attributes["tenant.id"]) where resource.attributes["tenant.id"] != nil
+          - set(attributes["site_id"], resource.attributes["host.site"]) where resource.attributes["host.site"] != nil
+          - set(attributes["process"], resource.attributes["process.executable.name"]) where resource.attributes["process.executable.name"] != nil
+          - set(attributes["process"], resource.attributes["process.command"]) where attributes["process"] == nil and resource.attributes["process.command"] != nil
+          - set(attributes["pid"], resource.attributes["process.pid"]) where resource.attributes["process.pid"] != nil
+  # Fluent Bit 5 (classic) pone service.name en el cuerpo, no en el recurso.
+  # Loki indexa service_name solo desde resource.attributes["service.name"].
+  transform/logs:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - set(resource.attributes["service.name"], attributes["service.name"]) where resource.attributes["service.name"] == nil and attributes["service.name"] != nil
+          - set(resource.attributes["service.name"], body["service.name"]) where resource.attributes["service.name"] == nil and IsMap(body) and body["service.name"] != nil
 
 exporters:
   prometheus:
@@ -23,11 +52,11 @@ service:
   pipelines:
     metrics:
       receivers: [otlp]
-      processors: [batch]
+      processors: [transform/metrics, batch]
       exporters: [prometheus]
     logs:
       receivers: [otlp]
-      processors: [batch]
+      processors: [filter/fluentbit_echo, transform/logs, batch]
       exporters: [otlphttp/loki]
     traces:
       receivers: [otlp]

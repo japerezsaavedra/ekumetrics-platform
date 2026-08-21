@@ -1,0 +1,27 @@
+.eku-skeleton {
+  display: grid;
+  gap: var(--eku-space-3);
+  width: 100%;
+}
+
+.eku-skeleton__bar {
+  display: block;
+  height: 0.75rem;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--eku-text-secondary) 18%, var(--eku-surface));
+  animation: eku-pulse 1.2s ease-in-out infinite;
+}
+
+.eku-skeleton__bar:nth-child(2) {
+  width: 80%;
+}
+
+.eku-skeleton__bar:nth-child(3) {
+  width: 64%;
+}
+
+@keyframes eku-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}

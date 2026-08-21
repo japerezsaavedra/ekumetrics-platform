@@ -1,0 +1,13 @@
+.mat-mdc-table {
+  background: var(--eku-surface-elevated);
+  color: var(--eku-text-primary);
+}
+
+.mat-mdc-header-cell {
+  color: var(--eku-text-secondary);
+}
+
+.mat-mdc-cell {
+  color: var(--eku-text-primary);
+  border-bottom-color: var(--eku-border);
+}

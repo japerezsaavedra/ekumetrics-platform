@@ -50,6 +50,87 @@ paths:
           description: Lote aceptado (pendiente de implementar)
         "400":
           description: Envelope inválido
+  /v1/ai/status:
+    get:
+      summary: Servicios y modelos de IA configurados
+      operationId: getAiStatus
+      responses:
+        "200":
+          description: Estado de EkuAssistant AI, servicios y presets de modelo
+  /v1/ai/settings:
+    get:
+      summary: Configuracion activa de IA (sin devolver la clave)
+      operationId: getAiSettings
+      responses:
+        "200":
+          description: Servicio, modelo y si hay clave guardada
+    put:
+      summary: Guardar servicio, modelo y credenciales en la base
+      operationId: saveAiSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [service, model]
+              properties:
+                service:
+                  type: string
+                model:
+                  type: string
+                apiKey:
+                  type: string
+                baseUrl:
+                  type: string
+      responses:
+        "200":
+          description: Configuracion persistida
+        "400":
+          description: Servicio, modelo o credenciales invalidos
+  /v1/ai/snapshot:
+    get:
+      summary: Snapshot de metricas del agente (Prometheus)
+      operationId: getAiSnapshot
+      parameters:
+        - in: query
+          name: agent_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Hechos medidos del host
+  /v1/ai/ask:
+    post:
+      summary: Pregunta a EkuAssistant AI
+      operationId: askHolmes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question:
+                  type: string
+                service:
+                  type: string
+                  description: ollama, openai, anthropic, kimi, grok, deepseek u openai_compat
+                provider:
+                  type: string
+                  description: Alias de service (compatibilidad)
+                model:
+                  type: string
+                  description: Id del modelo. Si se omite, se usa el default del servicio.
+      responses:
+        "201":
+          description: Respuesta de EkuAssistant AI
+        "400":
+          description: Pregunta o proveedor inválido
+        "503":
+          description: EkuAssistant AI o el modelo no disponibles
 components:
   schemas:
     HealthStatus:

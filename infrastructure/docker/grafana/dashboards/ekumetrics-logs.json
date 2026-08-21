@@ -1,0 +1,49 @@
+{
+  "uid": "ekms-logs",
+  "title": "Ekumetrics — Logs",
+  "description": "Logs que el agente reenvía a Loki. Vacío hasta logs.enabled: true y al menos una fuente.",
+  "tags": ["ekumetrics", "logs"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 2,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Volumen de logs (5m)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "loki", "uid": "Loki" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 15, "spanNulls": true } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({service_name=\"ekumetrics-agent\"}[5m]))",
+          "legendFormat": "ekumetrics-agent"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(count_over_time({service_name=~\".+\"}[5m]))",
+          "legendFormat": "todos"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "logs",
+      "title": "Logs del agente",
+      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "type": "loki", "uid": "Loki" },
+      "options": { "showTime": true, "showLabels": false, "wrapLogMessage": true, "enableLogDetails": true },
+      "targets": [
+        { "refId": "A", "expr": "{service_name=\"ekumetrics-agent\"}" }
+      ]
+    }
+  ]
+}

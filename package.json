@@ -4,6 +4,7 @@
   "description": "Ekumetrics Platform — plano de control, portal e ingesta del agente",
   "scripts": {
     "lab:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
+    "lab:ai": "docker compose -f infrastructure/docker/docker-compose.yml --profile ai up -d",
     "lab:down": "docker compose -f infrastructure/docker/docker-compose.yml down",
     "lab:logs": "docker compose -f infrastructure/docker/docker-compose.yml logs -f",
     "api:dev": "npm --prefix apps/platform-api run start:dev",

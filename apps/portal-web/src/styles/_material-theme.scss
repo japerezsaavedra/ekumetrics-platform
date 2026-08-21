@@ -1,0 +1,33 @@
+@use "@angular/material" as mat;
+
+html {
+  height: 100%;
+
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$violet-palette,
+        tertiary: mat.$blue-palette,
+      ),
+      typography: (
+        plain-family: (
+          "IBM Plex Sans",
+          "Open Sans",
+          "Helvetica Neue",
+          Arial,
+          sans-serif,
+        ),
+        brand-family: (
+          "IBM Plex Sans",
+          "Open Sans",
+          "Helvetica Neue",
+          Arial,
+          sans-serif,
+        ),
+      ),
+      density: 0,
+    )
+  );
+}
+
+// La paleta Material solo arranca el sistema. Los tokens --eku-* pisan --mat-sys-*.

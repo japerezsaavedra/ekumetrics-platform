@@ -1,0 +1,16 @@
+.eku-empty {
+  margin: auto 0;
+  padding: var(--eku-space-6) var(--eku-space-4);
+  text-align: center;
+}
+
+.eku-empty h2 {
+  margin: 0 0 var(--eku-space-2);
+  font-size: 1.05rem;
+}
+
+.eku-empty p {
+  margin: 0;
+  color: var(--eku-text-secondary);
+  line-height: 1.5;
+}

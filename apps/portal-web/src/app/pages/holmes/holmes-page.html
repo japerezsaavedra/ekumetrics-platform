@@ -1,0 +1,127 @@
+<section class="holmes">
+  <eku-page-header title="EkuAssistant AI">
+    <p>
+      Sesiones de consulta guardadas en este navegador.
+      @if (status()?.active; as active) {
+        {{ active.label }}
+        @if (!active.configured) {
+          <a routerLink="/configuracion">Complete la clave</a>
+        }
+      }
+    </p>
+    <button ekuActions class="holmes__ghost" type="button" (click)="startNew()" [disabled]="loading()">
+      Nueva sesion
+    </button>
+  </eku-page-header>
+
+  <mat-tab-group
+    animationDuration="0"
+    [selectedIndex]="selected()"
+    (selectedIndexChange)="selected.set($event)"
+  >
+    <mat-tab label="Sesion">
+      <div class="holmes__stage">
+        <div class="holmes__thread">
+          @if (activeTitle(); as title) {
+            <p class="holmes__session">{{ title }}</p>
+          }
+          @if (!messages().length && !loading()) {
+            <eku-empty-state
+              title="En que puedo ayudarle?"
+              message="Elija un ejemplo o escriba una pregunta. Cada sesion queda en Historial."
+            />
+            <div class="holmes__examples" role="list">
+              @for (question of examples; track question) {
+                <button
+                  type="button"
+                  class="holmes__example"
+                  role="listitem"
+                  (click)="askExample(question)"
+                  [disabled]="loading()"
+                >
+                  {{ question }}
+                </button>
+              }
+            </div>
+          }
+          @for (msg of messages(); track $index) {
+            <article class="holmes__row" [class.holmes__row--user]="msg.role === 'user'">
+              <div class="holmes__msg" [class.holmes__msg--user]="msg.role === 'user'">
+                <span class="holmes__role">
+                  {{ msg.role === 'user' ? 'Usted' : 'EkuAssistant' }}
+                </span>
+                <p>{{ msg.text }}</p>
+              </div>
+            </article>
+          }
+          @if (loading()) {
+            <div class="holmes__wait-box">
+              <eku-loading-skeleton label="Respondiendo" [bars]="2" />
+              <p class="holmes__wait">Pensando… {{ elapsed() }}s</p>
+            </div>
+          }
+          @if (error(); as message) {
+            <eku-error-state [message]="message" />
+          }
+        </div>
+      </div>
+    </mat-tab>
+
+    <mat-tab label="Historial">
+      <div class="holmes__history">
+        @if (!conversations().length) {
+          <eku-empty-state
+            title="Sin sesiones"
+            message="Cuando envie una pregunta se crea una sesion y aparece aqui."
+          />
+        } @else {
+          <ul>
+            @for (item of conversations(); track item.id) {
+              <li [class.is-active]="item.id === activeId()">
+                <button type="button" class="holmes__history-item" (click)="openConversation(item.id)">
+                  <span class="holmes__history-title">{{ item.title }}</span>
+                  <span class="holmes__history-when">
+                    {{ formatWhen(item.updatedAt) }}
+                    ·
+                    {{ questionCount(item) }}
+                    {{ questionCount(item) === 1 ? 'pregunta' : 'preguntas' }}
+                  </span>
+                </button>
+                <button
+                  class="holmes__history-remove"
+                  type="button"
+                  (click)="removeConversation(item.id, $event)"
+                  aria-label="Eliminar sesion"
+                  matTooltip="Eliminar sesion"
+                >
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+
+  @if (selected() === 0) {
+    <form class="holmes__composer" [formGroup]="form" (ngSubmit)="submit()">
+      <div class="holmes__dock">
+        <textarea
+          formControlName="question"
+          rows="3"
+          placeholder="Escriba una pregunta…"
+          (keydown)="onQuestionKeydown($event)"
+        ></textarea>
+        <button
+          class="holmes__send"
+          type="submit"
+          [disabled]="loading() || form.invalid"
+          aria-label="Enviar"
+        >
+          <mat-icon>arrow_upward</mat-icon>
+        </button>
+      </div>
+    </form>
+  }
+</section>

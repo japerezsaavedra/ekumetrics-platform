@@ -1,0 +1,165 @@
+{
+  "uid": "ekms-agent",
+  "title": "Ekumetrics — Agente",
+  "description": "Salud, identidad, licencia y módulos del Ekumetrics Agent.",
+  "tags": ["ekumetrics", "agent"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 2,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "agent_id",
+        "label": "agent_id",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "Prometheus" },
+        "query": "label_values(ekms_agent_identity, agent_id)",
+        "refresh": 2,
+        "includeAll": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Agente recibiendo",
+      "description": "1 si llegó una muestra de identidad en los últimos 2 minutos.",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "SILENCIO", "color": "red" }, "1": { "text": "EN LÍNEA", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "expr": "max(present_over_time(ekms_agent_identity{agent_id=\"$agent_id\"}[2m])) or vector(0)", "legendFormat": "estado" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Última muestra",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 90 }, { "color": "red", "value": 180 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [
+        { "refId": "A", "expr": "time() - max(timestamp(ekms_agent_identity{agent_id=\"$agent_id\"}))", "legendFormat": "atraso" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Licencia",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "NO VÁLIDA", "color": "red" }, "1": { "text": "VIGENTE", "color": "green" } } }
+          ]
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [
+        { "refId": "A", "expr": "max(ekms_agent_license_valid) or vector(0)", "legendFormat": "licencia" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Licencia restante",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dtdurations",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 259200 }, { "color": "green", "value": 604800 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [
+        { "refId": "A", "expr": "max(ekms_agent_license_until_timestamp_seconds) - time()", "legendFormat": "resta" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Versión",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "mappings": [] }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "textMode": "name" },
+      "targets": [
+        { "refId": "A", "expr": "ekms_agent_info", "legendFormat": "{{version}}" }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Identidad",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "options": { "showHeader": true },
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "Value": true, "__name__": true, "exported_instance": true, "exported_job": true, "instance": true, "job": true, "otel_scope_name": true, "otel_scope_version": true } } }
+      ],
+      "targets": [
+        { "refId": "A", "instant": true, "format": "table", "expr": "ekms_agent_identity{agent_id=\"$agent_id\"}" }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Módulos",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "options": { "showHeader": true, "sortBy": [{ "displayName": "Value", "desc": true }] },
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "exported_instance": true, "exported_job": true, "instance": true, "job": true, "otel_scope_name": true, "otel_scope_version": true }, "renameByName": { "module": "Módulo", "Value": "On" } } }
+      ],
+      "targets": [
+        { "refId": "A", "instant": true, "format": "table", "expr": "ekms_agent_module_enabled" }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "stat",
+      "title": "Activos known",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none" },
+      "targets": [{ "refId": "A", "expr": "sum(ekms_asset_known) or vector(0)", "legendFormat": "known" }]
+    },
+    {
+      "id": 21,
+      "type": "stat",
+      "title": "Activos suggested",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none" },
+      "targets": [{ "refId": "A", "expr": "sum(ekms_asset_suggested) or vector(0)", "legendFormat": "suggested" }]
+    }
+  ]
+}

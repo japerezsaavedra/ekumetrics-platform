@@ -1,0 +1,11 @@
+.mat-mdc-dialog-container {
+  --mdc-dialog-container-color: var(--eku-surface-elevated);
+  --mdc-dialog-subhead-color: var(--eku-text-primary);
+  --mdc-dialog-supporting-text-color: var(--eku-text-secondary);
+  --mdc-dialog-container-shape: var(--eku-radius);
+}
+
+.mat-mdc-snack-bar-container {
+  --mdc-snackbar-container-color: var(--eku-surface-elevated);
+  --mdc-snackbar-supporting-text-color: var(--eku-text-primary);
+}

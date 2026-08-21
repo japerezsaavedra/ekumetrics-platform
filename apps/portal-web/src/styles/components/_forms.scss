@@ -1,0 +1,108 @@
+.eku-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--eku-space-3);
+  margin: 0 0 var(--eku-space-5);
+  padding: var(--eku-space-4);
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface);
+}
+
+.eku-form--inline {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 8rem auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.eku-field {
+  display: grid;
+  grid-template-rows: 1.25rem 2.5rem 1.25rem;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.eku-field > span {
+  color: var(--eku-text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.25rem;
+}
+
+.eku-field input,
+.eku-field select,
+.eku-field button {
+  width: 100%;
+  min-height: 2.5rem;
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface);
+  color: var(--eku-text-primary);
+  font: inherit;
+}
+
+.eku-field button {
+  border-color: var(--eku-primary);
+  cursor: pointer;
+}
+
+.eku-field small {
+  min-height: 1.25rem;
+  color: var(--eku-critical);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+
+.eku-form > button[type='submit'] {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 2.5rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--eku-primary);
+  background: var(--eku-surface);
+  color: var(--eku-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.eku-add {
+  min-height: 2.5rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--eku-primary);
+  background: var(--eku-surface);
+  color: var(--eku-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 47.99rem) {
+  .eku-form,
+  .eku-form--inline {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mat-mdc-form-field {
+  --mdc-outlined-text-field-focus-outline-color: var(--eku-primary);
+  --mdc-outlined-text-field-focus-label-text-color: var(--eku-primary);
+  --mdc-outlined-text-field-label-text-color: var(--eku-text-secondary);
+  --mdc-outlined-text-field-input-text-color: var(--eku-text-primary);
+  --mdc-outlined-text-field-outline-color: var(--eku-border);
+  --mdc-outlined-text-field-hover-outline-color: color-mix(
+    in srgb,
+    var(--eku-text-primary) 28%,
+    transparent
+  );
+  --mdc-outlined-text-field-container-shape: 0;
+}
+
+.mat-mdc-tab-group {
+  --mdc-tab-indicator-active-indicator-color: var(--eku-primary);
+  --mat-tab-header-active-label-text-color: var(--eku-primary);
+  --mat-tab-header-active-focus-label-text-color: var(--eku-primary);
+  --mat-tab-header-active-hover-label-text-color: var(--eku-primary);
+  --mat-tab-header-inactive-label-text-color: var(--eku-text-secondary);
+  --mat-tab-header-divider-color: var(--eku-border);
+}

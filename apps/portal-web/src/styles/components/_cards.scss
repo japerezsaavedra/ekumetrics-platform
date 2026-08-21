@@ -1,0 +1,21 @@
+.mat-mdc-card {
+  --mdc-elevated-card-container-color: var(--eku-surface-elevated);
+  --mdc-outlined-card-container-color: var(--eku-surface-elevated);
+  --mdc-elevated-card-container-shape: var(--eku-radius);
+  --mdc-outlined-card-container-shape: var(--eku-radius);
+  --mdc-elevated-card-container-elevation: var(--eku-elevation);
+  background: var(--eku-surface-elevated);
+  color: var(--eku-text-primary);
+  border: 1px solid var(--eku-border);
+  border-radius: var(--eku-radius);
+  box-shadow: var(--eku-elevation);
+}
+
+.mat-mdc-card-title,
+.mat-mdc-card-content {
+  color: var(--eku-text-primary);
+}
+
+.mat-mdc-card-subtitle {
+  color: var(--eku-text-secondary);
+}

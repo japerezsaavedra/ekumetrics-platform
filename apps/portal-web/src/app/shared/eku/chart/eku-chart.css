@@ -1,0 +1,53 @@
+:host {
+  display: block;
+  position: relative;
+  width: 100%;
+  min-height: var(--eku-chart-height, 14rem);
+  height: var(--eku-chart-height, 14rem);
+}
+
+:host-context(.home.is-kiosk) {
+  min-height: 5.5rem;
+  height: 100%;
+}
+
+:host-context(.home.is-kiosk) .eku-chart__zoom {
+  display: none;
+}
+
+.eku-chart-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.eku-chart {
+  width: 100%;
+  height: 100%;
+}
+
+:host.eku-chart--pick .eku-chart {
+  cursor: crosshair;
+}
+
+.eku-chart__zoom {
+  position: absolute;
+  top: -1.85rem;
+  right: 0;
+  z-index: 2;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface);
+  color: var(--eku-text-secondary);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.eku-chart__zoom.is-on {
+  border-color: var(--eku-primary);
+  background: var(--eku-aside-hover);
+  color: var(--eku-text-primary);
+}

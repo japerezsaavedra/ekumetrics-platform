@@ -1,0 +1,48 @@
+@use "./styles/design-tokens";
+@use "./styles/typography";
+@use "./styles/density";
+@use "./styles/material-theme";
+@use "./styles/themes/light-theme";
+@use "./styles/themes/dark-theme";
+@use "./styles/utilities";
+@use "./styles/charts";
+@use "./styles/components/buttons";
+@use "./styles/components/cards";
+@use "./styles/components/dialogs";
+@use "./styles/components/forms";
+@use "./styles/components/navigation";
+@use "./styles/components/tables";
+
+html.eku-kiosk,
+html.eku-kiosk body,
+html.eku-kiosk app-root,
+html.eku-kiosk .shell,
+html.eku-kiosk .shell__body,
+html.eku-kiosk .mat-drawer-content,
+html.eku-kiosk .shell__main,
+html.eku-kiosk app-home-page {
+  height: 100%;
+}
+
+html.eku-kiosk body {
+  overflow: hidden;
+}
+
+html.eku-kiosk .shell__main {
+  padding: 0.6rem 0.85rem;
+}
+
+html.eku-kiosk .home__tabs.mat-mdc-tab-group {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 3.5rem);
+}
+
+html.eku-kiosk .home__tabs .mat-mdc-tab-body-wrapper,
+html.eku-kiosk .home__tabs .mat-mdc-tab-body,
+html.eku-kiosk .home__tabs .mat-mdc-tab-body-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}

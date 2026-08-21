@@ -1,0 +1,66 @@
+.admin-sites {
+  width: 100%;
+}
+
+.admin-sites__actions {
+  display: flex;
+  gap: var(--eku-space-2);
+}
+
+.admin-sites__hint {
+  margin: var(--eku-space-5) 0;
+  color: var(--eku-text-secondary);
+}
+
+.admin-sites__yaml {
+  margin: 0 0 var(--eku-space-5);
+  padding: var(--eku-space-4);
+  background: var(--eku-surface);
+  border: 1px solid var(--eku-border);
+}
+
+.admin-sites__yaml p {
+  margin: 0 0 var(--eku-space-3);
+  color: var(--eku-text-secondary);
+}
+
+.admin-sites__yaml pre {
+  margin: 0;
+  overflow: auto;
+  color: var(--eku-text-primary);
+  font-family: var(--eku-font-mono);
+  font-size: 0.85rem;
+}
+
+.admin-sites__list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--eku-space-4);
+}
+
+.admin-sites__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--eku-space-3);
+  padding: var(--eku-space-4);
+  background: var(--eku-surface);
+  border: 1px solid var(--eku-border);
+}
+
+.admin-sites__card header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--eku-space-3);
+}
+
+.admin-sites__card span,
+.admin-sites__card p {
+  margin: 0;
+  color: var(--eku-text-secondary);
+}
+
+@media (max-width: 47.99rem) {
+  .admin-sites__list {
+    grid-template-columns: 1fr;
+  }
+}

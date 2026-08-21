@@ -1,0 +1,5 @@
+.eku-error {
+  margin: var(--eku-space-3) 0 0;
+  color: var(--eku-critical);
+  line-height: 1.5;
+}

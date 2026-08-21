@@ -1,0 +1,52 @@
+:root,
+.eku-theme-light {
+  --eku-surface: var(--eku-ref-white);
+  --eku-surface-container: var(--eku-ref-page);
+  --eku-surface-elevated: var(--eku-ref-white);
+  --eku-border: color-mix(in srgb, var(--eku-ref-ink) 10%, transparent);
+  --eku-text-primary: var(--eku-ref-ink);
+  --eku-text-secondary: var(--eku-ref-muted);
+  --eku-primary: var(--eku-ref-primary);
+  --eku-on-primary: var(--eku-ref-white);
+  --eku-accent: var(--eku-ref-accent);
+  --eku-healthy: var(--eku-ref-healthy);
+  --eku-warning: var(--eku-ref-warning);
+  --eku-degraded: var(--eku-ref-degraded);
+  --eku-critical: var(--eku-ref-critical);
+  --eku-info: var(--eku-ref-info);
+  --eku-unknown: var(--eku-ref-unknown);
+  --eku-maintenance: var(--eku-ref-maintenance);
+  --eku-elevation: 0 1px 2px color-mix(in srgb, var(--eku-ref-ink) 4%, transparent),
+    0 10px 28px color-mix(in srgb, var(--eku-ref-ink) 6%, transparent);
+  --eku-nav-elevation: 0 2px 8px color-mix(in srgb, var(--eku-ref-ink) 14%, transparent);
+  --eku-aside-elevation: 2px 0 8px color-mix(in srgb, var(--eku-ref-ink) 8%, transparent);
+  --eku-nav-surface: var(--eku-ref-ink);
+  --eku-nav-on-surface: var(--eku-ref-white);
+  --eku-primary-muted: color-mix(in srgb, var(--eku-primary) 10%, transparent);
+  --eku-aside-border: color-mix(in srgb, var(--eku-ref-ink) 16%, transparent);
+  --eku-aside-hover: color-mix(in srgb, var(--eku-primary) 10%, var(--eku-surface));
+
+  --mat-sys-primary: var(--eku-primary);
+  --mat-sys-on-primary: var(--eku-on-primary);
+  --mat-sys-primary-container: color-mix(in srgb, var(--eku-primary) 12%, var(--eku-surface));
+  --mat-sys-on-primary-container: var(--eku-text-primary);
+  --mat-sys-secondary: var(--eku-accent);
+  --mat-sys-on-secondary: var(--eku-on-primary);
+  --mat-sys-surface: var(--eku-surface);
+  --mat-sys-surface-container: var(--eku-surface);
+  --mat-sys-surface-container-low: var(--eku-surface-container);
+  --mat-sys-surface-container-highest: var(--eku-surface-elevated);
+  --mat-sys-on-surface: var(--eku-text-primary);
+  --mat-sys-on-surface-variant: var(--eku-text-secondary);
+  --mat-sys-outline: color-mix(in srgb, var(--eku-text-primary) 22%, transparent);
+  --mat-sys-outline-variant: var(--eku-border);
+  --mat-sys-error: var(--eku-critical);
+  --mat-sys-corner-extra-small: 0;
+  --mat-sys-corner-small: 0;
+  --mat-sys-corner-medium: 0;
+  --mat-sys-corner-large: 0;
+  --mat-sys-corner-extra-large: 0;
+  --mat-sys-corner-full: 0;
+  --mat-sys-level1: var(--eku-elevation);
+  --mat-sys-level2: var(--eku-elevation);
+}

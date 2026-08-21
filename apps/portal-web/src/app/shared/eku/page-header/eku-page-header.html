@@ -1,0 +1,12 @@
+<header class="eku-page-header">
+  <div class="eku-page-header__copy">
+    <h1>{{ title() }}</h1>
+    @if (subtitle(); as text) {
+      <p>{{ text }}</p>
+    }
+    <ng-content />
+  </div>
+  <div class="eku-page-header__actions">
+    <ng-content select="[ekuActions]" />
+  </div>
+</header>

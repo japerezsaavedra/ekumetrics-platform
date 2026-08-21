@@ -1,0 +1,28 @@
+.eku-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--eku-space-4);
+  margin-bottom: var(--eku-space-5);
+}
+
+:host-context(.home.is-kiosk) .eku-page-header {
+  margin-bottom: var(--eku-space-3);
+}
+
+.eku-page-header h1 {
+  margin: 0 0 var(--eku-space-2);
+}
+
+.eku-page-header p {
+  margin: 0;
+  color: var(--eku-text-secondary);
+  line-height: 1.5;
+}
+
+.eku-page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--eku-space-2);
+  flex-shrink: 0;
+}

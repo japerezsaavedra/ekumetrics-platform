@@ -1,0 +1,80 @@
+<section class="admin-users">
+  <eku-page-header
+    title="Usuarios"
+    subtitle="El correo debe usar el dominio corporativo del tenant. Gradotech asigna el primer admin; el resto lo puede crear el admin de ese tenant."
+  >
+    <button ekuActions type="button" class="eku-add" (click)="toggleForm()">
+      {{ formOpen() ? 'Cancelar' : 'Agregar usuario' }}
+    </button>
+  </eku-page-header>
+
+  @if (formOpen()) {
+    <form class="eku-form" [formGroup]="form" (ngSubmit)="submit()">
+      @if (isOperator()) {
+        <label class="eku-field">
+          <span>Tenant</span>
+          <select formControlName="tenantSlug">
+            <option value="" disabled>Seleccione un tenant</option>
+            @for (item of tenantOptions(); track item.id) {
+              <option [value]="item.slug">
+                {{ item.name }} ({{ item.emailDomain ? '@' + item.emailDomain : 'sin dominio' }})
+              </option>
+            }
+          </select>
+          <small>{{ fieldInvalid('tenantSlug') ? 'Seleccione el tenant.' : '' }}</small>
+        </label>
+      }
+      <label class="eku-field">
+        <span>Nombre</span>
+        <input type="text" formControlName="displayName" placeholder="Ana Perez" />
+        <small>{{ fieldInvalid('displayName') ? 'Indique el nombre del usuario.' : '' }}</small>
+      </label>
+      <label class="eku-field">
+        <span>Correo corporativo</span>
+        <input type="email" formControlName="email" [placeholder]="'ana' + domainHint()" />
+        <small>
+          @if (form.controls.email.hasError('emailDomain') && fieldInvalid('email')) {
+            Debe terminar en {{ domainHint() }}.
+          } @else if (fieldInvalid('email')) {
+            Indique un correo valido.
+          }
+        </small>
+      </label>
+      <label class="eku-field">
+        <span>Rol</span>
+        <select formControlName="role">
+          <option value="admin">Administrador del tenant</option>
+          <option value="viewer">Lector</option>
+        </select>
+        <small></small>
+      </label>
+      <button type="submit" [disabled]="saving()">
+        {{ saving() ? 'Guardando…' : 'Agregar usuario' }}
+      </button>
+    </form>
+  }
+
+  @if (error(); as message) {
+    <eku-error-state [message]="message" />
+  }
+
+  <div class="admin-users__table">
+    <div class="admin-users__row admin-users__row--head">
+      <span>Usuario</span>
+      <span>Tenant</span>
+      <span>Rol</span>
+    </div>
+    @for (item of items(); track item.id) {
+      <div class="admin-users__row">
+        <span>
+          <strong>{{ item.displayName }}</strong>
+          <small>{{ item.email }}</small>
+        </span>
+        <span>{{ item.tenant.name }} · {{ item.tenant.slug }}</span>
+        <span>{{ item.role }}</span>
+      </div>
+    } @empty {
+      <p class="admin-users__hint">Aun no hay usuarios registrados.</p>
+    }
+  </div>
+</section>

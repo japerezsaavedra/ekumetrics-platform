@@ -1,0 +1,17 @@
+.mat-mdc-unelevated-button {
+  --mdc-filled-button-container-color: var(--eku-primary);
+  --mdc-filled-button-label-text-color: var(--eku-on-primary);
+  --mdc-filled-button-container-shape: 0;
+  border-radius: 0;
+}
+
+.mat-mdc-button {
+  --mdc-text-button-label-text-color: var(--eku-primary);
+  border-radius: 0;
+}
+
+.mat-mdc-icon-button {
+  --mdc-icon-button-icon-color: currentColor;
+  --mdc-icon-button-state-layer-shape: 0;
+  border-radius: 0;
+}

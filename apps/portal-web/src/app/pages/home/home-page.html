@@ -1,19 +1,976 @@
-<section class="home">
-  <p class="home__eyebrow">Plataforma de observabilidad</p>
-  <h1>Ekumetrics</h1>
-  <p class="home__lead">
-    Plano de control para inventario, incidentes y telemetría del agente.
-    Esta es la Fase 0: laboratorio y esqueletos.
-  </p>
-
-  <article class="home__card">
-    <h2>Estado de la API</h2>
-    @if (health(); as status) {
-      <p>Servicio {{ status.service }}: {{ status.status }}</p>
-    }
+<section class="home" [class.is-kiosk]="kioskOn()">
+  <eku-page-header [title]="pageTitle()">
     @if (error(); as message) {
-      <p class="home__error">{{ message }}</p>
+      <eku-error-state [message]="message" />
+    } @else if (data() && showDashTools()) {
+      <p>
+        {{ rangeText() }}
+        · refresco {{ refreshId() }}
+        @if (kioskOn()) {
+          · pantalla completa
+        }
+      </p>
+    } @else if (data()) {
+      <p>{{ inventoryHint() }}</p>
+    } @else {
+      <p>Leyendo series del laboratorio.</p>
     }
-    <p class="home__meta">{{ apiUrl }}/health</p>
-  </article>
+    @if (showDashTools()) {
+      <div ekuActions class="home__actions">
+        @if (showHostSelect()) {
+          <label class="home__agent">
+            <span>Host</span>
+            <select [formControl]="agentControl">
+              @for (item of hosts(); track item.id) {
+                <option [value]="item.id">{{ hostLabel(item) }}</option>
+              }
+            </select>
+          </label>
+        }
+        <label class="home__agent">
+          <span>Rango</span>
+          <select [formControl]="rangeControl">
+            @for (item of ranges; track item.id) {
+              <option [value]="item.id">{{ item.label }}</option>
+            }
+          </select>
+        </label>
+        <label class="home__agent">
+          <span>Refresco</span>
+          <select [formControl]="refreshControl">
+            @for (item of refreshes; track item.id) {
+              <option [value]="item.id">{{ item.label }}</option>
+            }
+          </select>
+        </label>
+        <button type="button" class="home__grafana" (click)="reload()">Actualizar</button>
+        <button
+          type="button"
+          class="home__grafana"
+          [class.is-on]="kioskOn()"
+          [matTooltip]="kioskOn() ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'"
+          (click)="toggleKiosk()"
+        >
+          <mat-icon>{{ kioskOn() ? 'fullscreen_exit' : 'fullscreen' }}</mat-icon>
+          {{ kioskOn() ? 'Salir' : 'Pantalla Completa' }}
+        </button>
+      </div>
+    }
+  </eku-page-header>
+
+  @if (!data() && !error()) {
+    <eku-loading-skeleton label="Cargando dashboard" [bars]="6" />
+  } @else if (data(); as board) {
+    @if (section() === 'hosts') {
+      @if (hosts().length === 0) {
+        <eku-empty-state message="No hay un host enviando metricas." />
+      } @else {
+        <div class="home__inventory">
+          @for (item of hosts(); track item.id) {
+            <a class="home__tile" [routerLink]="['/hosts', item.id]">
+              <header>
+                <span class="home__util-title">
+                  <mat-icon aria-hidden="true">dns</mat-icon>
+                  {{ hostLabel(item) }}
+                </span>
+                <span class="home__chip">{{ toneLabel(item.cpuUsed ?? null, 0.7, 0.9) }}</span>
+              </header>
+              <div class="home__tile-metrics">
+                <span>
+                  <b>{{ formatPercent(item.cpuUsed ?? null) }}</b>
+                  CPU
+                </span>
+                <span>
+                  <b>{{ formatPercent(item.memoryUsed ?? null) }}</b>
+                  Memoria
+                </span>
+                <span>
+                  <b>{{ formatNumber(item.cpus ?? null) }}</b>
+                  cores
+                </span>
+              </div>
+              <p class="home__muted">{{ formatUptime(item.uptimeSeconds ?? null) }} · dashboard y logs</p>
+            </a>
+          }
+        </div>
+      }
+    } @else if (section() === 'network') {
+      @if (networkDevices().length === 0) {
+        <eku-empty-state
+          title="Equipos de red"
+          message="Declare dispositivos en snmp.devices del agente 1.3. Switches, firewalls, APs, UPS o impresoras. Las NICs del servidor siguen en la tab Red de cada host."
+        />
+      } @else {
+        <div class="home__inventory">
+          @for (item of networkDevices(); track dbKey(item)) {
+            <a class="home__tile" [routerLink]="['/hosts', item.hostId]">
+              <header>
+                <span class="home__util-title">
+                  <mat-icon aria-hidden="true">lan</mat-icon>
+                  {{ item.name }}
+                </span>
+                <span class="home__chip">{{ item.up ? 'Activo' : 'Sin senal' }}</span>
+              </header>
+              <div class="home__tile-metrics">
+                <span>
+                  <b>{{ item.engine }}</b>
+                  tipo
+                </span>
+                <span>
+                  <b>{{ item.siteId || item.hostId }}</b>
+                  agente
+                </span>
+              </div>
+            </a>
+          }
+        </div>
+      }
+    } @else if (section() === 'agents') {
+      @if (hosts().length === 0) {
+        <eku-empty-state message="No hay identidad de agente en Prometheus." />
+      } @else {
+        <div class="home__inventory">
+          @for (item of hosts(); track item.id) {
+            <a class="home__tile" [routerLink]="['/agentes', item.id]">
+              <header>
+                <span class="home__util-title">
+                  <mat-icon aria-hidden="true">memory</mat-icon>
+                  {{ hostLabel(item) }}
+                </span>
+                <span class="home__chip">Agente</span>
+              </header>
+              <div class="home__tile-metrics">
+                <span>
+                  <b>{{ formatPercent(item.cpuUsed ?? null) }}</b>
+                  CPU
+                </span>
+                <span>
+                  <b>{{ formatUptime(item.agentUptimeSeconds ?? null) }}</b>
+                  uptime
+                </span>
+              </div>
+              <p class="home__muted">{{ item.id }}</p>
+            </a>
+          }
+        </div>
+      }
+    } @else if (section() === 'databases') {
+      @if (databases().length === 0) {
+        <eku-empty-state
+          title="Bases de datos"
+          message="Active databases en el YAML del agente 1.3 (PostgreSQL, MySQL, Redis o MongoDB) para ver los motores aqui."
+        />
+      } @else {
+        <div class="home__inventory">
+          @for (item of databases(); track dbKey(item)) {
+            <a class="home__tile" [routerLink]="['/hosts', item.hostId]">
+              <header>
+                <span class="home__util-title">
+                  <mat-icon aria-hidden="true">storage</mat-icon>
+                  {{ item.name }}
+                </span>
+                <span class="home__chip">{{ item.up ? 'Activa' : 'Sin senal' }}</span>
+              </header>
+              <div class="home__tile-metrics">
+                <span>
+                  <b>{{ item.engine }}</b>
+                  motor
+                </span>
+                <span>
+                  <b>{{ item.siteId || item.hostId }}</b>
+                  host
+                </span>
+              </div>
+            </a>
+          }
+        </div>
+      }
+    } @else if (section() === 'queues') {
+      @if (queues().length === 0) {
+        <eku-empty-state
+          title="Colas"
+          message="Active queues en el YAML del agente 1.3 (Kafka, RabbitMQ o NATS) para ver los brokers aqui."
+        />
+      } @else {
+        <div class="home__inventory">
+          @for (item of queues(); track dbKey(item)) {
+            <a class="home__tile" [routerLink]="['/hosts', item.hostId]">
+              <header>
+                <span class="home__util-title">
+                  <mat-icon aria-hidden="true">account_tree</mat-icon>
+                  {{ item.name }}
+                </span>
+                <span class="home__chip">{{ item.up ? 'Activa' : 'Sin senal' }}</span>
+              </header>
+              <div class="home__tile-metrics">
+                <span>
+                  <b>{{ item.engine }}</b>
+                  cola
+                </span>
+                <span>
+                  <b>{{ item.siteId || item.hostId }}</b>
+                  agente
+                </span>
+              </div>
+            </a>
+          }
+        </div>
+      }
+    } @else if (section() === 'icewarp') {
+      @if (icewarp().length === 0) {
+        <eku-empty-state
+          title="IceWarp"
+          message="Active icewarp en el YAML del agente 1.3 (SNMP 1161 y probes) para ver el correo aqui."
+        />
+      } @else {
+        <div class="home__inventory">
+          @for (item of icewarp(); track dbKey(item)) {
+            <a class="home__tile" [routerLink]="['/hosts', item.hostId]">
+              <header>
+                <span class="home__util-title">
+                  <mat-icon aria-hidden="true">mail</mat-icon>
+                  {{ item.name }}
+                </span>
+                <span class="home__chip">{{ item.up ? 'Activo' : 'Sin senal' }}</span>
+              </header>
+              <div class="home__tile-metrics">
+                <span>
+                  <b>IceWarp</b>
+                  correo
+                </span>
+                <span>
+                  <b>{{ item.siteId || item.hostId }}</b>
+                  agente
+                </span>
+              </div>
+            </a>
+          }
+        </div>
+      }
+    } @else if (section() === 'sap') {
+      @if (sap().length === 0) {
+        <eku-empty-state
+          title="SAP"
+          message="Active sap.channel en el YAML del agente para ver sistemas y sesiones aqui."
+        />
+      } @else {
+        <div class="home__inventory">
+          @for (item of sap(); track dbKey(item)) {
+            <a class="home__tile" [routerLink]="['/hosts', item.hostId]">
+              <header>
+                <span class="home__util-title">
+                  <mat-icon aria-hidden="true">lan</mat-icon>
+                  {{ item.name }}
+                </span>
+                <span class="home__chip">{{ item.up ? 'Activo' : 'Sin senal' }}</span>
+              </header>
+              <div class="home__tile-metrics">
+                <span>
+                  <b>SAP</b>
+                  canal
+                </span>
+                <span>
+                  <b>{{ item.siteId || item.hostId }}</b>
+                  agente
+                </span>
+              </div>
+            </a>
+          }
+        </div>
+      }
+    } @else if (section() === 'agent' && !board.agentId) {
+      <eku-empty-state message="No hay identidad de agente en Prometheus." />
+    } @else if (section() === 'agent') {
+      <div class="home__stack">
+        <div class="home__hostbar">
+          <p class="home__crumb">
+            <a routerLink="/agentes">Agentes</a>
+            <span>{{ board.agentId }}</span>
+          </p>
+          <div class="home__hostbar-meta">
+            <span>
+              <b>{{ board.host.siteId ?? board.agent.identity['site_id'] ?? 'sin datos' }}</b>
+              sitio
+            </span>
+            <span>
+              <b>{{ formatUptime(board.agent.uptimeSeconds ?? null) }}</b>
+              uptime
+            </span>
+          </div>
+        </div>
+        <div class="home__kpis home__kpis--four">
+          <article class="home__util" [class]="board.agent.online ? 'is-ok' : 'is-crit'">
+            <header>
+              <span class="home__util-title">
+                <mat-icon aria-hidden="true">memory</mat-icon>
+                Estado
+              </span>
+              <span class="home__chip">{{ board.agent.online ? 'En linea' : 'Silencio' }}</span>
+            </header>
+            <div class="home__tile-metrics">
+              <span>
+                <b>{{ board.agent.version ?? 'sin datos' }}</b>
+                version
+              </span>
+            </div>
+          </article>
+          <article
+            class="home__util"
+            [class]="board.agent.licenseValid === false ? 'is-crit' : board.agent.licenseValid ? 'is-ok' : ''"
+          >
+            <header>
+              <span class="home__util-title">
+                <mat-icon aria-hidden="true">verified</mat-icon>
+                Licencia
+              </span>
+              <span class="home__chip">
+                {{
+                  board.agent.licenseValid === null
+                    ? 'Sin datos'
+                    : board.agent.licenseValid
+                      ? 'Vigente'
+                      : 'No valida'
+                }}
+              </span>
+            </header>
+            <div class="home__tile-metrics">
+              <span>
+                <b>{{ formatUptime(board.agent.licenseRemainingSeconds) }}</b>
+                restante
+              </span>
+            </div>
+          </article>
+          <article
+            class="home__util"
+            [class.is-ok]="board.agent.lastSampleSeconds !== null && board.agent.lastSampleSeconds < 90"
+            [class.is-warn]="board.agent.lastSampleSeconds !== null && board.agent.lastSampleSeconds >= 90 && board.agent.lastSampleSeconds < 180"
+            [class.is-crit]="board.agent.lastSampleSeconds !== null && board.agent.lastSampleSeconds >= 180"
+          >
+            <header>
+              <span class="home__util-title">
+                <mat-icon aria-hidden="true">schedule</mat-icon>
+                Senal
+              </span>
+              <span class="home__chip">
+                {{
+                  board.agent.lastSampleSeconds === null
+                    ? 'Sin datos'
+                    : board.agent.lastSampleSeconds < 90
+                      ? 'Reciente'
+                      : board.agent.lastSampleSeconds < 180
+                        ? 'Tardia'
+                        : 'Silencio'
+                }}
+              </span>
+            </header>
+            <div class="home__tile-metrics">
+              <span>
+                <b>{{ formatAgo(board.agent.lastSampleSeconds) }}</b>
+                ultima muestra
+              </span>
+            </div>
+          </article>
+          <article class="home__util">
+            <header>
+              <span class="home__util-title">
+                <mat-icon aria-hidden="true">inventory_2</mat-icon>
+                Inventario
+              </span>
+              <span class="home__chip">Activos</span>
+            </header>
+            <div class="home__tile-metrics">
+              <span>
+                <b>{{ formatNumber(board.agent.assetsKnown) }}</b>
+                known
+              </span>
+              <span>
+                <b>{{ formatNumber(board.agent.assetsSuggested) }}</b>
+                suggested
+              </span>
+            </div>
+          </article>
+        </div>
+        <article class="home__panel">
+          <h3>Identidad</h3>
+          @if (identity().length === 0) {
+            <p class="home__muted">Sin etiquetas de identidad.</p>
+          } @else {
+            <div class="home__facts">
+              @for (pair of identity(); track pair[0]) {
+                <span>
+                  <b>{{ pair[1] }}</b>
+                  {{ pair[0] }}
+                </span>
+              }
+            </div>
+          }
+        </article>
+        <article class="home__panel">
+          <h3>Modulos</h3>
+          @if (agentModules().length === 0) {
+            <p class="home__muted">Sin ekms_agent_module_enabled.</p>
+          } @else {
+            <ul class="home__modules home__modules--grid">
+              @for (item of agentModules(); track item.module) {
+                <li [class.is-on]="item.enabled">
+                  <span>{{ item.module }}</span>
+                  <strong>{{ item.enabled ? 'On' : 'Off' }}</strong>
+                </li>
+              }
+            </ul>
+          }
+        </article>
+      </div>
+    } @else if (section() === 'host' && !board.host.id) {
+      <eku-empty-state message="No hay un host enviando metricas." />
+    } @else if (section() === 'host') {
+      <div class="home__hostbar">
+        <p class="home__crumb">
+          <a routerLink="/hosts">Hosts</a>
+          <span>{{ board.host.id }}</span>
+        </p>
+        @if (kioskOn()) {
+          <button type="button" class="home__grafana" (click)="toggleKiosk()">Salir</button>
+        }
+        <div class="home__hostbar-meta">
+          <span>
+            <b>{{ board.host.siteId ?? 'sin datos' }}</b>
+            sitio
+          </span>
+          <span>
+            <b>{{ formatUptime(board.host.uptimeSeconds) }}</b>
+            uptime
+          </span>
+        </div>
+      </div>
+      <mat-tab-group
+        class="home__tabs"
+        animationDuration="0"
+        [selectedIndex]="hostTabIndex()"
+        (selectedIndexChange)="onHostTab($event)"
+      >
+        <mat-tab label="Resumen">
+          <div class="home__grid">
+        <article class="home__util" [class]="tonePercent(board.host.cpuUsed, 0.7, 0.9)">
+          <header>
+            <span class="home__util-title">
+              <mat-icon aria-hidden="true">developer_board</mat-icon>
+              CPU
+            </span>
+            <span class="home__chip">{{ toneLabel(board.host.cpuUsed, 0.7, 0.9) }}</span>
+          </header>
+          <div class="home__cpu-hero">
+            <strong>{{ formatPercent(board.host.cpuUsed) }}</strong>
+            <div class="home__cpu-stats">
+              <span>
+                <b>{{ formatNumber(board.host.cpus) }}</b>
+                cores
+              </span>
+              <span>
+                <b>{{ formatNumber(board.host.load1m, 2) }}</b>
+                carga
+              </span>
+              <span>
+                <b>{{ formatPercent(cpuLoadShare()) }}</b>
+                / core
+              </span>
+            </div>
+          </div>
+          <div class="home__mix" aria-hidden="true">
+            @for (item of cpuStates(); track item.name) {
+              <i [class]="'is-' + item.cls" [style.flex-grow]="item.value * 100"></i>
+            }
+            <i class="is-idle" [style.flex-grow]="cpuIdle() * 100"></i>
+          </div>
+          @if (cpuStates().length > 0) {
+            <p class="home__states">
+              @for (item of cpuStates(); track item.name) {
+                <span [class]="'is-' + item.cls">
+                  {{ item.name }} {{ formatPercent(item.value) }}
+                </span>
+              }
+            </p>
+          }
+          <div class="home__cpu-spark">
+            @if (sparkPoints(board.host.series.cpu); as spark) {
+              <svg class="home__spark" viewBox="0 0 120 28" preserveAspectRatio="none">
+                @if (sparkArea(board.host.series.cpu); as area) {
+                  <polygon [attr.points]="area" />
+                }
+                <polyline [attr.points]="spark" />
+              </svg>
+            }
+            @if (cpuTrend(); as trend) {
+              <span class="home__trend">
+                <mat-icon aria-hidden="true">{{ trendIcon(trend) }}</mat-icon>
+                {{ trendLabel(trend) }}
+              </span>
+            }
+          </div>
+        </article>
+
+        <article class="home__util" [class]="tonePercent(board.host.memoryUsed, 0.8, 0.9)">
+          <header>
+            <span class="home__util-title">
+              <mat-icon aria-hidden="true">memory</mat-icon>
+              Memoria
+            </span>
+            <span class="home__chip">{{ toneLabel(board.host.memoryUsed, 0.8, 0.9) }}</span>
+          </header>
+          <div class="home__cpu-hero">
+            <strong>{{ formatPercent(board.host.memoryUsed) }}</strong>
+            <div class="home__cpu-stats">
+              <span>
+                <b>{{ formatSize(board.host.memoryUsedBytes) }}</b>
+                usada
+              </span>
+              <span>
+                <b>{{ formatSize(board.host.memoryTotalBytes) }}</b>
+                total
+              </span>
+            </div>
+          </div>
+          <div class="home__bar" aria-hidden="true">
+            <i [style.width]="barWidth(board.host.memoryUsed)"></i>
+          </div>
+        </article>
+
+        <article class="home__util home__util--disk" [class]="tonePercent(board.host.diskUsed, 0.8, 0.9)">
+          <header>
+            <span class="home__util-title">
+              <mat-icon aria-hidden="true">hard_drive</mat-icon>
+              Disco /
+            </span>
+            <span class="home__chip">{{ toneLabel(board.host.diskUsed, 0.8, 0.9) }}</span>
+          </header>
+          <div class="home__cpu-hero">
+            <eku-chart [option]="diskChart()" />
+            <div class="home__cpu-stats">
+              <span>
+                <b>{{ formatSize(board.host.diskUsedBytes) }}</b>
+                usada
+              </span>
+              <span>
+                <b>{{ formatSize(board.host.diskTotalBytes) }}</b>
+                total
+              </span>
+            </div>
+          </div>
+        </article>
+
+        <article class="home__util home__util--load">
+          <header>
+            <span class="home__util-title">
+              <mat-icon aria-hidden="true">speed</mat-icon>
+              Carga
+            </span>
+          </header>
+          <div class="home__load">
+            <span>
+              <b>{{ formatNumber(board.host.load1m, 2) }}</b>
+              load 1
+            </span>
+            <span>
+              <b>{{ formatNumber(board.host.load5m, 2) }}</b>
+              load 5
+            </span>
+            <span>
+              <b>{{ formatNumber(board.host.load15m, 2) }}</b>
+              load 15
+            </span>
+          </div>
+          <div class="home__cpu-spark">
+            @if (sparkPoints(board.host.series.load1); as spark) {
+              <svg class="home__spark" viewBox="0 0 120 28" preserveAspectRatio="none">
+                @if (sparkArea(board.host.series.load1); as area) {
+                  <polygon [attr.points]="area" />
+                }
+                <polyline [attr.points]="spark" />
+              </svg>
+            }
+          </div>
+        </article>
+
+        <article class="home__chart">
+          <h3>
+            CPU en uso por estado
+            <app-home-chart-ask [hint]="hints.cpu" [question]="askText('CPU en uso por estado')" />
+          </h3>
+          <eku-chart [option]="cpuChart()" />
+        </article>
+        <article class="home__chart">
+          <h3>
+            Carga
+            <app-home-chart-ask [hint]="hints.load" [question]="askText('Carga')" />
+          </h3>
+          <eku-chart [option]="loadChart()" />
+        </article>
+        <article class="home__chart">
+          <h3>
+            Memoria por estado
+            <app-home-chart-ask [hint]="hints.memory" [question]="askText('Memoria por estado')" />
+          </h3>
+          <eku-chart [option]="memoryChart()" />
+        </article>
+          </div>
+        </mat-tab>
+
+        <mat-tab label="Procesos">
+          <div class="home__grid">
+            <article class="home__panel home__panel--disks home__span">
+              <div class="home__logs-toolbar">
+                <h3>
+                  Procesos
+                  <app-home-chart-ask [hint]="hints.processes" [question]="askText('Procesos')" />
+                </h3>
+                <label class="home__agent">
+                  <span>Buscar</span>
+                  <input type="search" [formControl]="processQuery" placeholder="nombre o pid" />
+                </label>
+              </div>
+              @if ((board.host.processes ?? []).length === 0) {
+                <eku-empty-state
+                  message="Active metrics.processes en el YAML. Si names esta vacio, el agente lista todos los procesos."
+                />
+              } @else {
+                @if (hostProcesses().length === 0) {
+                  <p class="home__muted">Sin coincidencias para esa busqueda.</p>
+                } @else {
+                  <table class="home__table home__table--proc">
+                    <thead>
+                      <tr>
+                        <th [attr.aria-sort]="processSortAria('name')">
+                          <button type="button" class="home__sort" (click)="sortProcesses('name')">
+                            Proceso
+                            @if (processSortKey() === 'name') {
+                              <span aria-hidden="true">{{ processSortDir() === 'asc' ? '↑' : '↓' }}</span>
+                            }
+                          </button>
+                        </th>
+                        <th [attr.aria-sort]="processSortAria('cpu')">
+                          <button type="button" class="home__sort" (click)="sortProcesses('cpu')">
+                            CPU
+                            @if (processSortKey() === 'cpu') {
+                              <span aria-hidden="true">{{ processSortDir() === 'asc' ? '↑' : '↓' }}</span>
+                            }
+                          </button>
+                        </th>
+                        <th [attr.aria-sort]="processSortAria('memory')">
+                          <button type="button" class="home__sort" (click)="sortProcesses('memory')">
+                            Memoria
+                            @if (processSortKey() === 'memory') {
+                              <span aria-hidden="true">{{ processSortDir() === 'asc' ? '↑' : '↓' }}</span>
+                            }
+                          </button>
+                        </th>
+                        <th [attr.aria-sort]="processSortAria('disk')">
+                          <button type="button" class="home__sort" (click)="sortProcesses('disk')">
+                            Disco
+                            @if (processSortKey() === 'disk') {
+                              <span aria-hidden="true">{{ processSortDir() === 'asc' ? '↑' : '↓' }}</span>
+                            }
+                          </button>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (item of hostProcesses(); track item.name + item.pid) {
+                        <tr>
+                          <td>
+                            <span class="home__proc">
+                              <b>{{ item.name || 'sin nombre' }}</b>
+                              <small>pid {{ item.pid || '—' }}</small>
+                            </span>
+                          </td>
+                          <td [class]="tonePercent(item.cpuShare, 0.7, 0.9)">
+                            <div class="home__usage">
+                              <div class="home__bar" aria-hidden="true">
+                                <i [style.width]="barWidth(item.cpuBar)"></i>
+                              </div>
+                              <span>{{ formatPercent(item.cpu) }}</span>
+                            </div>
+                          </td>
+                          <td [class]="tonePercent(item.memShare, 0.8, 0.9)">
+                            <div class="home__usage">
+                              <div class="home__bar" aria-hidden="true">
+                                <i [style.width]="barWidth(item.memBar)"></i>
+                              </div>
+                              <span>{{ formatSize(item.memoryBytes) }}</span>
+                            </div>
+                          </td>
+                          <td>
+                            <span class="home__proc-io">
+                              <span>R {{ formatRate(item.diskReadBytesPerSec) }}</span>
+                              <span>W {{ formatRate(item.diskWriteBytesPerSec) }}</span>
+                            </span>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+              }
+            </article>
+          </div>
+        </mat-tab>
+
+        <mat-tab label="Disco">
+          <div class="home__grid">
+        <article class="home__panel home__panel--disks home__span">
+        <h3>Particiones</h3>
+        @if (board.host.disks.length === 0) {
+          <p class="home__muted">Sin filesystems reportados.</p>
+        } @else {
+          <table class="home__table">
+            <thead>
+              <tr>
+                <th>Montaje</th>
+                <th>Dispositivo</th>
+                <th>Tipo</th>
+                <th>Usado</th>
+                <th>Libre</th>
+                <th>Total</th>
+                <th>Uso</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of board.host.disks; track item.mount + item.device) {
+                <tr>
+                  <td>{{ item.mount }}</td>
+                  <td>{{ item.device || '—' }}</td>
+                  <td>{{ item.type || '—' }}</td>
+                  <td>{{ formatSize(item.usedBytes) }}</td>
+                  <td>{{ formatSize(item.freeBytes) }}</td>
+                  <td>{{ formatSize(item.totalBytes) }}</td>
+                  <td [class]="tonePercent(item.used, 0.8, 0.9)">
+                    <div class="home__usage">
+                      <div class="home__bar" aria-hidden="true">
+                        <i [style.width]="barWidth(item.used)"></i>
+                      </div>
+                      <span>{{ formatPercent(item.used) }}</span>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </article>
+        <article class="home__chart">
+          <h3>
+            Disco I/O
+            <app-home-chart-ask [hint]="hints.diskIo" [question]="askText('Disco I/O')" />
+          </h3>
+          <eku-chart [option]="diskIoChart()" />
+        </article>
+        <article class="home__chart">
+          <h3>
+            Disco operaciones / s
+            <app-home-chart-ask [hint]="hints.diskOps" [question]="askText('Disco operaciones / s')" />
+          </h3>
+          <eku-chart [option]="diskOpsChart()" />
+        </article>
+          </div>
+        </mat-tab>
+
+        <mat-tab label="Red">
+          <div class="home__grid">
+            @if (hostNics().length === 0) {
+              <div class="home__span">
+                <eku-empty-state message="No hay perifericos de red en este host." />
+              </div>
+            } @else {
+              <div class="home__nics">
+                @for (item of hostNics(); track nicKey(item)) {
+                  <article class="home__util home__util--nic">
+                    <header>
+                      <span class="home__util-title">
+                        <mat-icon aria-hidden="true">lan</mat-icon>
+                        {{ item.device }}
+                      </span>
+                    </header>
+                    <div class="home__tile-metrics">
+                      <span>
+                        <b>{{ formatRate(item.rxBytesPerSec) }}</b>
+                        RX
+                      </span>
+                      <span>
+                        <b>{{ formatRate(item.txBytesPerSec) }}</b>
+                        TX
+                      </span>
+                      <span>
+                        <b>{{ formatNumber(item.errorsPerSec + item.dropsPerSec, 2) }}</b>
+                        fallos
+                      </span>
+                    </div>
+                  </article>
+                }
+              </div>
+            }
+        <article class="home__chart">
+          <h3>
+            Red I/O
+            <app-home-chart-ask [hint]="hints.network" [question]="askText('Red I/O')" />
+          </h3>
+          <eku-chart [option]="networkChart()" />
+        </article>
+        <article class="home__chart">
+          <h3>
+            Paquetes de red
+            <app-home-chart-ask [hint]="hints.packets" [question]="askText('Paquetes de red')" />
+          </h3>
+          <eku-chart [option]="packetsChart()" />
+        </article>
+        <article class="home__chart">
+          <h3>
+            Red errores y descartes
+            <app-home-chart-ask [hint]="hints.netFault" [question]="askText('Red errores y descartes')" />
+          </h3>
+          <eku-chart [option]="netFaultChart()" />
+        </article>
+        <article class="home__chart">
+          <h3>
+            Conexiones TCP
+            <app-home-chart-ask [hint]="hints.tcpConn" [question]="askText('Conexiones TCP')" />
+          </h3>
+          <eku-chart [option]="tcpConnChart()" />
+        </article>
+        <article class="home__chart">
+          <h3>
+            Conexiones UDP y otras
+            <app-home-chart-ask [hint]="hints.otherConn" [question]="askText('Conexiones UDP y otras')" />
+          </h3>
+          <eku-chart [option]="otherConnChart()" />
+        </article>
+          </div>
+        </mat-tab>
+
+        <mat-tab label="Logs">
+          <div class="home__grid">
+        <article class="home__chart home__span">
+          <h3>
+            Volumen de logs
+            <app-home-chart-ask [hint]="hints.volume" [question]="askText('Volumen de logs')" />
+          </h3>
+          <eku-chart [option]="volumeChart()" [pickTime]="true" (timePicked)="pickLogVolume($event)" />
+        </article>
+
+        <article class="home__panel home__panel--disks home__span">
+          <div class="home__logs-toolbar">
+            <h3>Logs del agente</h3>
+            <div class="home__logs-toolbar-end">
+              @if (logTimeFilter()) {
+                <button type="button" class="home__grafana" (click)="clearLogTime()">
+                  {{ logTimeLabel() }} · quitar
+                </button>
+              }
+              <label class="home__agent">
+                <span>Buscar</span>
+                <input type="search" [formControl]="logQuery" placeholder="texto o fecha" />
+              </label>
+            </div>
+          </div>
+          @if (filteredLogs().length === 0) {
+            <eku-empty-state
+              [message]="logTimeFilter() || logQuery.value ? 'Sin logs en ese intervalo o busqueda.' : 'Vacio hasta logs.enabled: true y al menos una fuente, o no hay coincidencias.'"
+            />
+          } @else {
+            @if (selectedLog(); as log) {
+              <aside class="home__log-detail">
+                <header class="home__logs-toolbar">
+                  <h3>
+                    Detalle
+                    <a
+                      class="home__log-ask"
+                      routerLink="/asistente"
+                      [queryParams]="{ q: askLogText(log) }"
+                      matTooltip="Preguntar a EkuAssistant"
+                      matTooltipPosition="above"
+                    >
+                      <mat-icon>smart_toy</mat-icon>
+                    </a>
+                  </h3>
+                  <button type="button" class="home__grafana" (click)="closeLog()">Cerrar</button>
+                </header>
+                <dl class="home__pairs home__pairs--log">
+                  @for (pair of log.detail; track pair[0]) {
+                    <div>
+                      <dt>{{ pair[0] }}</dt>
+                      <dd>{{ pair[1] }}</dd>
+                    </div>
+                  }
+                </dl>
+              </aside>
+            }
+            <table class="home__table home__table--logs">
+              <thead>
+                <tr>
+                  <th [attr.aria-sort]="logSortAria('ts')">
+                    <button type="button" class="home__sort" (click)="sortLogs('ts')">
+                      Fecha
+                      @if (logSortKey() === 'ts') {
+                        <span aria-hidden="true">{{ logSortDir() === 'asc' ? '↑' : '↓' }}</span>
+                      }
+                    </button>
+                  </th>
+                  <th [attr.aria-sort]="logSortAria('level')">
+                    <button type="button" class="home__sort" (click)="sortLogs('level')">
+                      Nivel
+                      @if (logSortKey() === 'level') {
+                        <span aria-hidden="true">{{ logSortDir() === 'asc' ? '↑' : '↓' }}</span>
+                      }
+                    </button>
+                  </th>
+                  <th [attr.aria-sort]="logSortAria('line')">
+                    <button type="button" class="home__sort" (click)="sortLogs('line')">
+                      Mensaje
+                      @if (logSortKey() === 'line') {
+                        <span aria-hidden="true">{{ logSortDir() === 'asc' ? '↑' : '↓' }}</span>
+                      }
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of pagedLogs(); track item.key) {
+                  <tr
+                    [class.is-on]="selectedLogKey() === item.key"
+                    (click)="selectLog(item.key)"
+                  >
+                    <td>{{ item.tsLabel }}</td>
+                    <td>{{ item.level || '—' }}</td>
+                    <td>
+                      @for (part of highlightLog(item.message); track $index) {
+                        @if (part.hit) {
+                          <mark>{{ part.value }}</mark>
+                        } @else {
+                          {{ part.value }}
+                        }
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            <div class="home__pager">
+              <button type="button" class="home__grafana" (click)="prevLogPage()" [disabled]="logPage() <= 1">
+                Anterior
+              </button>
+              <span>{{ logRangeLabel() }}</span>
+              <button
+                type="button"
+                class="home__grafana"
+                (click)="nextLogPage()"
+                [disabled]="logPage() >= logPageCount()"
+              >
+                Siguiente
+              </button>
+            </div>
+          }
+        </article>
+          </div>
+        </mat-tab>
+      </mat-tab-group>
+    }
+  }
 </section>
