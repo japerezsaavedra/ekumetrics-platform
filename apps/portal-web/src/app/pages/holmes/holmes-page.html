@@ -1,30 +1,22 @@
 <section class="holmes">
-  <eku-page-header title="EkuAssistant AI">
-    <p>
-      Historial de este usuario en el tenant actual.
-      @if (scopeHint(); as scope) {
-        {{ scope }}.
-      }
-      @if (status()?.active; as active) {
-        {{ active.label }}
-        @if (!active.configured) {
-          <a routerLink="/configuracion">Complete la clave</a>
-        }
-      }
-    </p>
+  <eku-page-header
+    title="EkuAssistant AI"
+    subtitle="Asistente de operaciones: analiza métricas y registros de sus agentes y responde solo a lo que pregunte."
+  >
     <button ekuActions class="holmes__ghost" type="button" (click)="startNew()" [disabled]="loading()">
       Nueva sesion
     </button>
   </eku-page-header>
 
   <mat-tab-group
+    class="holmes__tabs"
     animationDuration="0"
     [selectedIndex]="selected()"
     (selectedIndexChange)="selected.set($event)"
   >
     <mat-tab label="Sesion">
       <div class="holmes__stage">
-        <div class="holmes__thread">
+        <div class="holmes__thread" #thread>
           @if (activeTitle(); as title) {
             <p class="holmes__session">{{ title }}</p>
           }
@@ -49,24 +41,56 @@
           }
           @for (msg of messages(); track $index) {
             <article class="holmes__row" [class.holmes__row--user]="msg.role === 'user'">
+              <span class="holmes__avatar" [class.holmes__avatar--user]="msg.role === 'user'" aria-hidden="true">
+                <mat-icon>{{ msg.role === 'user' ? 'person' : 'smart_toy' }}</mat-icon>
+              </span>
               <div class="holmes__msg" [class.holmes__msg--user]="msg.role === 'user'">
                 <span class="holmes__role">
                   {{ msg.role === 'user' ? 'Usted' : 'EkuAssistant' }}
                 </span>
-                <p>{{ msg.text }}</p>
+                @if (msg.role === 'user') {
+                  <p class="holmes__plain">{{ msg.text }}</p>
+                } @else {
+                  <eku-markdown [text]="msg.text" />
+                }
               </div>
             </article>
           }
           @if (loading()) {
-            <div class="holmes__wait-box">
-              <eku-loading-skeleton label="Respondiendo" [bars]="2" />
-              <p class="holmes__wait">Pensando… {{ elapsed() }}s</p>
+            <div class="holmes__row">
+              <span class="holmes__avatar" aria-hidden="true">
+                <mat-icon>smart_toy</mat-icon>
+              </span>
+              <div class="holmes__wait-box">
+                <eku-loading-skeleton label="Respondiendo" [bars]="2" />
+                <p class="holmes__wait">Pensando… {{ elapsed() }}s</p>
+              </div>
             </div>
           }
           @if (error(); as message) {
             <eku-error-state [message]="message" />
           }
         </div>
+
+        <form class="holmes__composer" [formGroup]="form" (ngSubmit)="submit()">
+          <div class="holmes__dock">
+            <textarea
+              formControlName="question"
+              rows="2"
+              placeholder="Escriba una pregunta…"
+              (keydown)="onQuestionKeydown($event)"
+            ></textarea>
+            <button
+              class="holmes__send"
+              type="submit"
+              [disabled]="loading() || form.invalid"
+              aria-label="Enviar"
+            >
+              <mat-icon>arrow_upward</mat-icon>
+            </button>
+          </div>
+          <p class="holmes__hint">Enter envía · Shift+Enter nueva línea</p>
+        </form>
       </div>
     </mat-tab>
 
@@ -106,25 +130,4 @@
       </div>
     </mat-tab>
   </mat-tab-group>
-
-  @if (selected() === 0) {
-    <form class="holmes__composer" [formGroup]="form" (ngSubmit)="submit()">
-      <div class="holmes__dock">
-        <textarea
-          formControlName="question"
-          rows="3"
-          placeholder="Escriba una pregunta…"
-          (keydown)="onQuestionKeydown($event)"
-        ></textarea>
-        <button
-          class="holmes__send"
-          type="submit"
-          [disabled]="loading() || form.invalid"
-          aria-label="Enviar"
-        >
-          <mat-icon>arrow_upward</mat-icon>
-        </button>
-      </div>
-    </form>
-  }
 </section>

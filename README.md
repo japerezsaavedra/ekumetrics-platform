@@ -57,17 +57,9 @@ Consola de Keycloak: http://localhost:8080 (`admin` / `ekumetrics`).
 
 ## EkuAssistant AI
 
-El chat de `/asistente` investiga con el modelo elegido en `/configuracion` (Grok, Ollama, etc.). La API mide Prometheus y EkuAssistant AI explica con ese modelo.
+El chat de `/asistente` usa el modelo elegido en `/configuracion`. Ollama corre en el mismo compose (`qwen3.5:4b`). El portal muestra el modelo en uso y si está activo, también para Grok, OpenAI o Claude.
 
-```bash
-OLLAMA_HOST=0.0.0.0:11434 ollama serve
-ollama pull qwen2.5:14b
-npm run lab:ai
-```
-
-Ollama debe escuchar en `0.0.0.0` si el modelo local corre en esta Mac.
-
-En un VPS sin GPU use el mismo Ollama con `qwen2.5:7b` y, si no hay Ollama en el host, `docker compose --profile ai --profile ai-ollama up -d`.
+`npm run lab:ai` sigue siendo opcional (Holmes).
 
 ## Tenants, sitios y agentes
 

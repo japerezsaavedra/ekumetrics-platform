@@ -11,9 +11,20 @@ type AiServiceOption = {
   models: string[];
   defaultModel: string;
   configured: boolean;
+  hasApiKey?: boolean;
+  savedModel?: string;
+  savedBaseUrl?: string;
   needsKey: boolean;
   needsBaseUrl: boolean;
   hint: string;
+};
+
+type AiActive = {
+  label: string;
+  model: string;
+  configured: boolean;
+  online: boolean;
+  detail: string;
 };
 
 type AiSettings = {
@@ -23,6 +34,7 @@ type AiSettings = {
   hasApiKey: boolean;
   systemPrompt?: string;
   services: AiServiceOption[];
+  active?: AiActive;
 };
 
 @Component({
@@ -37,6 +49,7 @@ export class SettingsPage {
   private readonly fb = inject(FormBuilder);
 
   protected readonly catalog = signal<AiServiceOption[]>([]);
+  protected readonly active = signal<AiActive | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly saved = signal(false);
   protected readonly loading = signal(false);
@@ -46,7 +59,7 @@ export class SettingsPage {
 
   protected readonly form = this.fb.nonNullable.group({
     service: ['ollama', [Validators.required]],
-    model: ['qwen2.5:14b', [Validators.required]],
+    model: ['qwen3.5:4b', [Validators.required]],
     apiKey: [''],
     baseUrl: [''],
     systemPrompt: [''],
@@ -69,7 +82,7 @@ export class SettingsPage {
   }
 
   protected hasSavedKey(): boolean {
-    return this.savedHasKey() && this.form.controls.service.value === this.savedService();
+    return Boolean(this.selectedService()?.hasApiKey);
   }
 
   protected catalogModels(): string[] {
@@ -108,7 +121,7 @@ export class SettingsPage {
       })
       .subscribe({
         next: (value) => {
-          this.applySettings({ ...value, services: this.catalog() });
+          this.applySettings(value);
           this.form.controls.apiKey.setValue('');
           this.loading.set(false);
           this.saved.set(true);
@@ -130,6 +143,7 @@ export class SettingsPage {
 
   private applySettings(value: AiSettings): void {
     this.catalog.set(value.services ?? this.catalog());
+    this.active.set(value.active ?? this.active());
     this.savedService.set(value.service);
     this.savedHasKey.set(value.hasApiKey);
     this.savedModel.set(value.model);
@@ -148,12 +162,13 @@ export class SettingsPage {
 
   private applyServiceDefaults(serviceId: string): void {
     const service = this.catalog().find((item) => item.id === serviceId);
-    if (service?.models.length && !service.models.includes(this.form.controls.model.value)) {
+    this.form.controls.apiKey.setValue('');
+    if (service?.savedModel) {
+      this.form.controls.model.setValue(service.savedModel);
+    } else if (service?.models.length && !service.models.includes(this.form.controls.model.value)) {
       this.form.controls.model.setValue(service.defaultModel || service.models[0]);
     }
-    if (service?.id !== 'openai_compat') {
-      this.form.controls.baseUrl.setValue('');
-    }
+    this.form.controls.baseUrl.setValue(service?.id === 'openai_compat' ? service.savedBaseUrl || '' : '');
   }
 
   private syncValidators(): void {

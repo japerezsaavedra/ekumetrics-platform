@@ -18,12 +18,12 @@ export type AiServiceDef = {
 export const AI_SERVICES: AiServiceDef[] = [
   {
     id: 'ollama',
-    label: 'Ollama (local)',
+    label: 'Ekumetrics',
     transport: 'holmes',
-    models: ['qwen2.5:14b', 'qwen2.5:7b'],
-    defaultModel: 'qwen2.5:14b',
+    models: ['qwen3.5:4b', 'qwen3.5:9b'],
+    defaultModel: 'qwen3.5:4b',
     keyEnv: [],
-    hint: 'Qwen en esta Mac. No requiere clave.',
+    hint: 'Modelo local de la plataforma. Por defecto qwen3.5:4b. No requiere clave.',
   },
   {
     id: 'openai',
@@ -86,7 +86,7 @@ export const AI_SERVICES: AiServiceDef[] = [
 ];
 
 export const HOLMES_MODEL_KEYS: Record<AiProvider, string> = {
-  ollama: 'qwen2.5:14b',
+  ollama: 'qwen3.5:4b',
   openai: 'gpt-5.6',
   anthropic: 'claude-sonnet-5',
   openai_compat: 'openai-compatible',

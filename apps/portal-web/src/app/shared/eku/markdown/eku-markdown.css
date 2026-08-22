@@ -1,0 +1,146 @@
+eku-markdown {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.eku-md {
+  color: inherit;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  overflow-x: auto;
+}
+
+.eku-md > :first-child {
+  margin-top: 0;
+}
+
+.eku-md > :last-child {
+  margin-bottom: 0;
+}
+
+.eku-md p,
+.eku-md ul,
+.eku-md ol,
+.eku-md pre,
+.eku-md table,
+.eku-md blockquote {
+  margin: 0 0 0.85rem;
+}
+
+.eku-md h1,
+.eku-md h2,
+.eku-md h3,
+.eku-md h4 {
+  margin: 1rem 0 0.45rem;
+  color: inherit;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+
+.eku-md h1 {
+  font-size: 1.2rem;
+}
+
+.eku-md h2 {
+  font-size: 1.08rem;
+}
+
+.eku-md h3,
+.eku-md h4 {
+  font-size: 1rem;
+}
+
+.eku-md ul,
+.eku-md ol {
+  padding-left: 1.35rem;
+}
+
+.eku-md ul {
+  list-style: disc;
+}
+
+.eku-md ol {
+  list-style: decimal;
+}
+
+.eku-md li {
+  margin: 0.2rem 0;
+}
+
+.eku-md li > p {
+  margin: 0.2rem 0;
+}
+
+.eku-md strong {
+  font-weight: 650;
+}
+
+.eku-md em {
+  font-style: italic;
+}
+
+.eku-md code {
+  padding: 0.12rem 0.35rem;
+  font-family: var(--eku-font-mono);
+  font-size: 0.86em;
+  background: color-mix(in srgb, var(--eku-text-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--eku-border) 80%, transparent);
+}
+
+.eku-md pre {
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  background: color-mix(in srgb, var(--eku-text-primary) 6%, var(--eku-surface));
+  border: 1px solid var(--eku-border);
+}
+
+.eku-md pre code {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.eku-md table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  background: var(--eku-surface);
+}
+
+.eku-md th,
+.eku-md td {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--eku-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.eku-md th {
+  font-weight: 650;
+  background: color-mix(in srgb, var(--eku-text-primary) 6%, var(--eku-surface));
+}
+
+.eku-md tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--eku-text-primary) 3%, transparent);
+}
+
+.eku-md blockquote {
+  margin-left: 0;
+  padding: 0.15rem 0 0.15rem 0.85rem;
+  border-left: 3px solid var(--eku-primary);
+  color: var(--eku-text-secondary);
+}
+
+.eku-md hr {
+  margin: 1rem 0;
+  border: 0;
+  border-top: 1px solid var(--eku-border);
+}
+
+.eku-md a {
+  color: var(--eku-primary);
+  text-decoration: underline;
+}

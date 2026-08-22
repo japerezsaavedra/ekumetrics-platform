@@ -2,7 +2,7 @@
 # se elige en /configuracion y se guarda en PostgreSQL.
 # El prompt de producto lo envia platform-api (additional_system_prompt).
 # Metricas las resuelve platform-api. Holmes investiga y explica.
-model: openai/qwen2.5:14b
+model: openai/qwen3.5:4b
 max_steps: 8
 
 toolsets:

@@ -1,27 +1,27 @@
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  computed,
+  effect,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatIcon } from '@angular/material/icon';
 import { MatTab, MatTabGroup } from '@angular/material/tabs';
 import { MatTooltip } from '@angular/material/tooltip';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { API_BASE_URL } from '../../core/api';
-import { AuthService } from '../../core/auth';
-import { TenantService } from '../../core/tenant';
 import { EkuEmptyStateComponent } from '../../shared/eku/empty-state/eku-empty-state';
 import { EkuErrorStateComponent } from '../../shared/eku/error-state/eku-error-state';
 import { EkuLoadingSkeletonComponent } from '../../shared/eku/loading-skeleton/eku-loading-skeleton';
+import { EkuMarkdownComponent } from '../../shared/eku/markdown/eku-markdown';
 import { EkuPageHeaderComponent } from '../../shared/eku/page-header/eku-page-header';
 import { ConversationStore, type ChatMessage, type Conversation } from './conversation-store';
 import { EXAMPLE_QUESTIONS } from './example-questions';
-
-type AiStatus = {
-  active?: {
-    label: string;
-    model: string;
-    configured: boolean;
-  };
-};
 
 type AiAskResponse = {
   analysis: string;
@@ -31,12 +31,12 @@ type AiAskResponse = {
   selector: 'app-holmes-page',
   imports: [
     ReactiveFormsModule,
-    RouterLink,
     MatIcon,
     MatTooltip,
     MatTabGroup,
     MatTab,
     EkuPageHeaderComponent,
+    EkuMarkdownComponent,
     EkuEmptyStateComponent,
     EkuErrorStateComponent,
     EkuLoadingSkeletonComponent,
@@ -49,26 +49,19 @@ export class HolmesPage {
   private readonly http = inject(HttpClient);
   private readonly fb = inject(FormBuilder);
   private readonly store = inject(ConversationStore);
-  private readonly auth = inject(AuthService);
-  private readonly tenants = inject(TenantService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  protected readonly scopeHint = computed(() => {
-    const email = this.auth.email();
-    const tenant = this.tenants.current()?.name || this.tenants.slug();
-    return email && tenant ? `${email} · ${tenant}` : '';
-  });
 
   protected readonly examples = EXAMPLE_QUESTIONS;
   protected readonly conversations = this.store.conversations;
   protected readonly activeId = this.store.activeId;
   protected readonly activeTitle = computed(() => this.store.active()?.title ?? null);
-  protected readonly status = signal<AiStatus | null>(null);
   protected readonly messages = signal<ChatMessage[]>([]);
   protected readonly error = signal<string | null>(null);
   protected readonly loading = signal(false);
   protected readonly elapsed = signal(0);
   protected readonly selected = signal(0);
+  private readonly thread = viewChild<ElementRef<HTMLElement>>('thread');
   private timer: ReturnType<typeof setInterval> | undefined;
 
   protected readonly form = this.fb.nonNullable.group({
@@ -79,9 +72,10 @@ export class HolmesPage {
     effect(() => {
       this.messages.set(this.store.active()?.messages ?? []);
     });
-    this.http.get<AiStatus>(`${API_BASE_URL}/v1/ai/status`).subscribe({
-      next: (value) => this.status.set(value),
-      error: () => this.error.set('No se pudo conectar con la API.'),
+    effect(() => {
+      this.messages();
+      this.loading();
+      queueMicrotask(() => this.scrollToEnd());
     });
     const draft = this.route.snapshot.queryParamMap.get('q')?.trim();
     if (draft && draft.length >= 4) {
@@ -194,13 +188,8 @@ export class HolmesPage {
   private replyText(analysis: string): string {
     const marker = 'Explicacion:';
     const index = analysis.indexOf(marker);
-    let text = (index >= 0 ? analysis.slice(index + marker.length) : analysis).trim();
-    text = text.replace(/\*\*?/g, '');
-    text = text.replace(/__/g, '');
-    text = text.replace(/`+/g, '');
-    text = text.replace(/^#{1,6}\s+/gm, '');
-    text = text.replace(/^\s*-{3,}\s*$/gm, '');
-    return text.trim() || 'Sin respuesta.';
+    const text = (index >= 0 ? analysis.slice(index + marker.length) : analysis).trim();
+    return text || 'Sin respuesta.';
   }
 
   private stopTimer(): void {
@@ -208,5 +197,15 @@ export class HolmesPage {
       clearInterval(this.timer);
       this.timer = undefined;
     }
+  }
+
+  private scrollToEnd(): void {
+    const el = this.thread()?.nativeElement;
+    if (!el) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
   }
 }

@@ -2,6 +2,43 @@
   max-width: 44rem;
 }
 
+.settings__status {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 var(--eku-space-5);
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--eku-aside-border);
+  background: var(--eku-surface);
+}
+
+.settings__status p {
+  margin: 0;
+}
+
+.settings__status small {
+  color: var(--eku-text-secondary);
+}
+
+.settings__status-chip {
+  justify-self: start;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.settings__status.is-on {
+  border-color: var(--eku-healthy);
+}
+
+.settings__status.is-on .settings__status-chip {
+  color: var(--eku-healthy);
+}
+
+.settings__status.is-off .settings__status-chip {
+  color: var(--eku-critical, #b42318);
+}
+
 .settings__form {
   margin: 0;
 }

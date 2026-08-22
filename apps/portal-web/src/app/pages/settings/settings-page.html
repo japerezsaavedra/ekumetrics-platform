@@ -4,6 +4,17 @@
     subtitle="Elija proveedor y modelo. EkuAssistant ya lleva el prompt de producto; aquí solo se suma un complemento suyo."
   />
 
+  @if (active(); as current) {
+    <article class="settings__status" [class.is-on]="current.online" [class.is-off]="!current.online">
+      <span class="settings__status-chip">{{ current.online ? 'Activo' : 'Inactivo' }}</span>
+      <p>
+        <strong>{{ current.label }}</strong>
+        · {{ current.model }}
+      </p>
+      <small>{{ current.detail }}</small>
+    </article>
+  }
+
   <form class="eku-form settings__form" [formGroup]="form" (ngSubmit)="submit()">
     <label class="eku-field">
       <span>Servicio</span>
@@ -38,10 +49,19 @@
         <input
           type="password"
           formControlName="apiKey"
-          autocomplete="off"
-          [placeholder]="hasSavedKey() ? 'Dejar en blanco para conservar la clave' : 'sk-...'"
+          autocomplete="new-password"
+          name="eku-ai-key"
+          [placeholder]="hasSavedKey() ? 'Clave guardada. Déjela en blanco para conservarla.' : 'Pegue la clave y pulse Guardar'"
         />
-        <small>{{ fieldInvalid('apiKey') ? 'Indique la clave API.' : '' }}</small>
+        <small>
+          {{
+            fieldInvalid('apiKey')
+              ? 'Indique la clave API.'
+              : hasSavedKey()
+                ? 'La clave no se muestra. Solo se reemplaza si pega una nueva.'
+                : ''
+          }}
+        </small>
       </label>
     }
 

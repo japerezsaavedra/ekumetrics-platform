@@ -7,6 +7,17 @@ import { ConfigService } from '@nestjs/config';
 import { AiService } from './ai.service';
 
 describe('AiService', () => {
+  const fetchMock = jest.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({
+      ok: false,
+      json: async () => ({}),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
   const prisma = {
     aiInquiry: { create: jest.fn() },
     aiSettings: {
@@ -32,21 +43,47 @@ describe('AiService', () => {
     const kimi = status.services.find((item) => item.id === 'kimi');
     expect(kimi?.configured).toBe(false);
     expect(kimi?.models).toContain('kimi-k3');
+    expect(status.active.model).toBe('qwen3.5:4b');
+    expect(status.active.online).toBe(false);
+  });
+
+  it('marca ollama activo cuando responde y tiene el modelo', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ models: [{ name: 'qwen3.5:4b' }] }),
+    });
+    const status = await service().status();
+    expect(status.active.online).toBe(true);
+    expect(status.active.detail).toBe('Modelo disponible');
   });
 
   it('guarda ollama en settings sin clave', async () => {
-    prisma.aiSettings.upsert.mockResolvedValue({
+    const previous = {
+      service: 'openai',
+      model: 'gpt-5.6',
+      apiKey: 'sk-old',
+      baseUrl: null,
+      vault: { openai: { apiKey: 'sk-old', model: 'gpt-5.6' } },
+    };
+    const savedRow = {
       service: 'ollama',
-      model: 'qwen2.5:14b',
+      model: 'qwen3.5:4b',
       apiKey: null,
       baseUrl: null,
-    });
+      vault: { openai: { apiKey: 'sk-old', model: 'gpt-5.6' }, ollama: { model: 'qwen3.5:4b' } },
+    };
+    prisma.aiSettings.findUnique.mockResolvedValueOnce(previous).mockResolvedValue(savedRow);
+    prisma.aiSettings.upsert.mockResolvedValue(savedRow);
     const saved = await service().saveSettings({
       service: 'ollama',
-      model: 'qwen2.5:14b',
+      model: 'qwen3.5:4b',
     });
     expect(saved.hasApiKey).toBe(false);
     expect(saved.service).toBe('ollama');
+    const vault = prisma.aiSettings.upsert.mock.calls.at(-1)?.[0].update.vault as {
+      openai?: { apiKey?: string };
+    };
+    expect(vault.openai?.apiKey).toBe('sk-old');
   });
 
   it('rechaza openai en settings sin clave', async () => {

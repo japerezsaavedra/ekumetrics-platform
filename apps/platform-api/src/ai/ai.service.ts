@@ -14,12 +14,35 @@ import {
   type AiProvider,
   type AiServiceDef,
 } from './ai.providers';
-import { composeInvestigatorPrompt, userComplement } from './investigator-prompt';
+import {
+  composeInvestigatorPrompt,
+  sanitizeAssistantReply,
+  userComplement,
+} from './investigator-prompt';
+
+type FactScope = {
+  cpu: boolean;
+  load: boolean;
+  memory: boolean;
+  network: boolean;
+  logs: boolean;
+  traces: boolean;
+  forecast: boolean;
+  hourStats: boolean;
+};
 
 type HolmesChatResponse = {
   analysis?: string;
   tool_calls?: unknown;
 };
+
+type VaultEntry = {
+  apiKey?: string | null;
+  baseUrl?: string | null;
+  model?: string | null;
+};
+
+type Vault = Record<string, VaultEntry>;
 
 type StoredAiSettings = {
   service: string;
@@ -27,6 +50,7 @@ type StoredAiSettings = {
   apiKey: string | null;
   baseUrl: string | null;
   systemPrompt: string | null;
+  vault: Vault;
 };
 
 type SaveAiSettingsInput = {
@@ -42,12 +66,24 @@ export type HostSnapshot = {
   found: boolean;
   tenantId: string | null;
   siteId: string | null;
+  mode: string | null;
   cpus: number | null;
   cpuHostPercent: number | null;
+  cpuByState: Array<{ state: string; percent: number }>;
   load1m: number | null;
   load5m: number | null;
   load15m: number | null;
   memoryUsedPercent: number | null;
+  memoryUsedBytes: number | null;
+  memoryTotalBytes: number | null;
+  diskUsedBytes: number | null;
+  diskTotalBytes: number | null;
+  networkReceiveBps: number | null;
+  networkTransmitBps: number | null;
+  networkErrorsPerSec: number | null;
+  networkDropsPerSec: number | null;
+  uptimeSeconds: number | null;
+  modules: string[];
   logs: { source: string; lines: string[] };
   forecast: {
     method: string;
@@ -75,6 +111,9 @@ export class AiService {
     const stored = await this.getStoredSettings();
     const defaultProvider = stored?.service ?? this.defaultProvider();
     const activeService = findService(defaultProvider) ?? AI_SERVICES[0];
+    const model = stored?.model ?? this.serviceDefaultModel(activeService);
+    const configured = this.isServiceConfigured(activeService, stored);
+    const probe = await this.probeActive(activeService, stored, model);
     return {
       defaultProvider,
       defaultService: defaultProvider,
@@ -82,20 +121,27 @@ export class AiService {
       active: {
         service: activeService.id,
         label: activeService.label,
-        model: stored?.model ?? this.serviceDefaultModel(activeService),
-        configured: this.isServiceConfigured(activeService, stored),
+        model,
+        configured,
         investigator: 'holmes',
+        ...probe,
       },
-      services: AI_SERVICES.map((item) => ({
-        id: item.id,
-        label: item.label,
-        models: item.models,
-        defaultModel: this.serviceDefaultModel(item),
-        configured: this.isServiceConfigured(item, stored),
-        needsKey: item.keyEnv.length > 0,
-        needsBaseUrl: item.id === 'openai_compat',
-        hint: item.hint,
-      })),
+      services: AI_SERVICES.map((item) => {
+        const saved = stored?.vault[item.id];
+        return {
+          id: item.id,
+          label: item.label,
+          models: item.models,
+          defaultModel: this.serviceDefaultModel(item),
+          configured: this.isServiceConfigured(item, stored),
+          hasApiKey: Boolean(saved?.apiKey),
+          savedModel: saved?.model ?? '',
+          savedBaseUrl: item.id === 'openai_compat' ? (saved?.baseUrl ?? '') : '',
+          needsKey: item.keyEnv.length > 0,
+          needsBaseUrl: item.id === 'openai_compat',
+          hint: item.hint,
+        };
+      }),
       providers: AI_PROVIDERS.map((id) => ({
         id,
         configured: this.isConfigured(id),
@@ -111,9 +157,10 @@ export class AiService {
       service: status.active.service,
       model: status.active.model,
       baseUrl: stored?.baseUrl ?? '',
-      hasApiKey: Boolean(stored?.apiKey),
+      hasApiKey: Boolean(stored?.vault[status.active.service]?.apiKey),
       systemPrompt: userComplement(stored?.systemPrompt),
       services: status.services,
+      active: status.active,
     };
   }
 
@@ -124,19 +171,22 @@ export class AiService {
       throw new BadRequestException('El modelo es obligatorio');
     }
     const existing = await this.getStoredSettings();
-    const apiKey = input.apiKey?.trim() || (existing?.service === service.id ? existing.apiKey : null);
+    const previous = existing?.vault[service.id] ?? {};
+    const apiKey = input.apiKey?.trim() || previous.apiKey || null;
     const baseUrl =
-      (input.baseUrl ?? '').trim() ||
-      (existing?.service === service.id ? existing.baseUrl : null) ||
-      service.baseUrl ||
-      null;
-    const systemPrompt = userComplement(input.systemPrompt) || null;
+      (input.baseUrl ?? '').trim() || previous.baseUrl || service.baseUrl || null;
+    const systemPrompt = userComplement(input.systemPrompt) || existing?.systemPrompt || null;
+    const vault: Vault = {
+      ...(existing?.vault ?? {}),
+      [service.id]: { apiKey, baseUrl, model },
+    };
     const next: StoredAiSettings = {
       service: service.id,
       model,
       apiKey,
       baseUrl,
       systemPrompt,
+      vault,
     };
     if (!this.isServiceConfigured(service, next)) {
       throw new BadRequestException(
@@ -145,7 +195,7 @@ export class AiService {
           : `Indique la clave API de ${service.label}`,
       );
     }
-    const saved = await this.prisma.aiSettings.upsert({
+    await this.prisma.aiSettings.upsert({
       where: { slot: 'default' },
       create: {
         slot: 'default',
@@ -153,6 +203,7 @@ export class AiService {
         model: next.model,
         apiKey: next.apiKey,
         baseUrl: next.baseUrl,
+        vault,
         systemPrompt: next.systemPrompt,
       },
       update: {
@@ -160,16 +211,11 @@ export class AiService {
         model: next.model,
         apiKey: next.apiKey,
         baseUrl: next.baseUrl,
+        vault,
         systemPrompt: next.systemPrompt,
       },
     });
-    return {
-      service: saved.service,
-      model: saved.model,
-      baseUrl: saved.baseUrl ?? '',
-      hasApiKey: Boolean(saved.apiKey),
-      systemPrompt: userComplement(saved.systemPrompt),
-    };
+    return this.getSettings();
   }
 
   async ask(
@@ -221,6 +267,7 @@ export class AiService {
   async snapshot(
     agentIdInput?: string | null,
     tenantInput?: string | null,
+    scope: FactScope = this.fullScope(),
   ): Promise<HostSnapshot | null> {
     const agentId = (agentIdInput ?? '').trim().replace(/"/g, '');
     if (!agentId) {
@@ -228,20 +275,61 @@ export class AiService {
     }
     const tenantId = this.sanitize(tenantInput ?? undefined);
     try {
-      const cpuQuery = `1 - sum(rate(system_cpu_time_seconds_total{agent_id="${agentId}",state="idle"}[5m])) / sum(rate(system_cpu_time_seconds_total{agent_id="${agentId}"}[5m]))`;
-      const [identity, cpus, cpu, load1, load5, load15, mem, logs, cpuSeries] =
-        await Promise.all([
-          this.promInstant(`ekms_agent_identity{agent_id="${agentId}"}`),
-          this.promInstant(`system_cpu_logical_count{agent_id="${agentId}"}`),
+      const sel = `{agent_id="${agentId}"}`;
+      const netSel = `{agent_id="${agentId}",device!="lo"}`;
+      const cpuQuery = `1 - sum(rate(system_cpu_time_seconds_total${sel.replace('}', ',state="idle"}')}[5m])) / sum(rate(system_cpu_time_seconds_total${sel}[5m]))`;
+      const [
+        identity,
+        cpus,
+        cpu,
+        cpuStates,
+        load1,
+        load5,
+        load15,
+        memUsed,
+        memTotal,
+        diskUsed,
+        diskTotal,
+        netIo,
+        netErr,
+        netDrop,
+        uptime,
+        uptimeAlt,
+        modules,
+        logs,
+        cpuSeries,
+      ] = await Promise.all([
+          this.promInstant(`ekms_agent_identity${sel}`),
+          this.promInstant(`system_cpu_logical_count${sel}`),
           this.promInstant(cpuQuery),
-          this.promInstant(`system_cpu_load_average_1m{agent_id="${agentId}"}`),
-          this.promInstant(`system_cpu_load_average_5m{agent_id="${agentId}"}`),
-          this.promInstant(`system_cpu_load_average_15m{agent_id="${agentId}"}`),
           this.promInstant(
-            `sum(system_memory_usage_bytes{agent_id="${agentId}",state="used"}) / sum(system_memory_usage_bytes{agent_id="${agentId}"})`,
+            `sum by (state) (rate(system_cpu_time_seconds_total${sel}[5m]))`,
           ),
-          this.lokiLines(),
-          this.promRange(cpuQuery, 3600, 60),
+          this.promInstant(`system_cpu_load_average_1m${sel}`),
+          this.promInstant(`system_cpu_load_average_5m${sel}`),
+          this.promInstant(`system_cpu_load_average_15m${sel}`),
+          this.promInstant(`sum(system_memory_usage_bytes${sel.replace('}', ',state="used"}')})`),
+          this.promInstant(`sum(system_memory_usage_bytes${sel})`),
+          this.promInstant(
+            `sum(system_filesystem_usage_bytes{agent_id="${agentId}",mountpoint="/",state="used"})`,
+          ),
+          this.promInstant(
+            `sum(system_filesystem_usage_bytes{agent_id="${agentId}",mountpoint="/"})`,
+          ),
+          this.promInstant(
+            `sum by (direction) (rate(system_network_io_bytes_total${netSel}[5m]))`,
+          ),
+          this.promInstant(`sum(rate(system_network_errors_total${netSel}[5m]))`),
+          this.promInstant(`sum(rate(system_network_dropped_total${netSel}[5m]))`),
+          this.promInstant(`max(system_uptime${sel})`),
+          this.promInstant(`max(system_uptime_seconds${sel})`),
+          this.promInstant(`ekms_agent_module_enabled${sel}`),
+          scope.logs
+            ? this.lokiLines()
+            : Promise.resolve({ source: '', lines: [] as string[] }),
+          scope.forecast || scope.hourStats
+            ? this.promRange(cpuQuery, 3600, 60)
+            : Promise.resolve([] as Array<[number, number]>),
         ]);
       const ident = identity[0]?.metric ?? {};
       if (tenantId && ident.tenant_id && ident.tenant_id !== tenantId) {
@@ -251,25 +339,56 @@ export class AiService {
         value !== undefined && Number.isFinite(value) ? value : null;
       const cpuHostPercent =
         finite(cpu[0]?.value) === null ? null : (cpu[0].value as number) * 100;
+      const memoryUsedBytes = finite(memUsed[0]?.value);
+      const memoryTotalBytes = finite(memTotal[0]?.value);
+      const memoryUsedPercent =
+        memoryUsedBytes !== null && memoryTotalBytes !== null && memoryTotalBytes > 0
+          ? (memoryUsedBytes / memoryTotalBytes) * 100
+          : null;
+      const byDirection = (direction: string) =>
+        finite(netIo.find((row) => row.metric.direction === direction)?.value);
+      const cpuStateTotal = cpuStates.reduce(
+        (sum, row) => sum + (Number.isFinite(row.value) ? row.value : 0),
+        0,
+      );
+      const cpuByState = cpuStates
+        .filter((row) => row.metric.state && Number.isFinite(row.value) && cpuStateTotal > 0)
+        .map((row) => ({
+          state: row.metric.state,
+          percent: (row.value / cpuStateTotal) * 100,
+        }));
       const forecast = this.forecastCpu(cpuHostPercent, cpuSeries);
       const stats = this.cpuStats(cpuSeries);
       const host = {
         agentId: ident.agent_id ?? agentId,
-        found: identity.length > 0 || cpus.length > 0,
+        found: identity.length > 0 || cpus.length > 0 || memoryTotalBytes !== null,
         tenantId: ident.tenant_id ?? null,
         siteId: ident.site_id ?? null,
+        mode: ident.mode ?? null,
         cpus: finite(cpus[0]?.value),
         cpuHostPercent,
+        cpuByState,
         load1m: finite(load1[0]?.value),
         load5m: finite(load5[0]?.value),
         load15m: finite(load15[0]?.value),
-        memoryUsedPercent:
-          finite(mem[0]?.value) === null ? null : (mem[0].value as number) * 100,
+        memoryUsedPercent,
+        memoryUsedBytes,
+        memoryTotalBytes,
+        diskUsedBytes: finite(diskUsed[0]?.value),
+        diskTotalBytes: finite(diskTotal[0]?.value),
+        networkReceiveBps: byDirection('receive'),
+        networkTransmitBps: byDirection('transmit'),
+        networkErrorsPerSec: finite(netErr[0]?.value),
+        networkDropsPerSec: finite(netDrop[0]?.value),
+        uptimeSeconds: finite(uptime[0]?.value) ?? finite(uptimeAlt[0]?.value),
+        modules: modules
+          .filter((row) => row.value === 1 && row.metric.module)
+          .map((row) => row.metric.module),
         logs,
         forecast,
         traces: {
           available: false,
-          note: 'Las trazas solo van al exporter debug. Falta un backend (Tempo).',
+          note: 'Trazas no disponibles.',
         },
       };
       return {
@@ -325,16 +444,127 @@ export class AiService {
       if (!row) {
         return null;
       }
+      const vault = this.parseVault(row.vault);
+      if (row.service && !vault[row.service] && (row.apiKey || row.baseUrl)) {
+        vault[row.service] = {
+          apiKey: row.apiKey,
+          baseUrl: row.baseUrl,
+          model: row.model,
+        };
+      }
       return {
         service: row.service,
         model: row.model,
         apiKey: row.apiKey,
         baseUrl: row.baseUrl,
         systemPrompt: row.systemPrompt,
+        vault,
       };
     } catch {
       return null;
     }
+  }
+
+  private parseVault(value: unknown): Vault {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {};
+    }
+    const vault: Vault = {};
+    for (const [id, entry] of Object.entries(value as Record<string, unknown>)) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        continue;
+      }
+      const item = entry as VaultEntry;
+      vault[id] = {
+        apiKey: item.apiKey ?? null,
+        baseUrl: item.baseUrl ?? null,
+        model: item.model ?? null,
+      };
+    }
+    return vault;
+  }
+
+  private async probeActive(
+    service: AiServiceDef,
+    stored: StoredAiSettings | null,
+    model: string,
+  ): Promise<{ reachable: boolean; modelReady: boolean; online: boolean; detail: string }> {
+    if (!this.isServiceConfigured(service, stored)) {
+      return {
+        reachable: false,
+        modelReady: false,
+        online: false,
+        detail: 'Falta configurar el servicio',
+      };
+    }
+    try {
+      const probe =
+        service.id === 'ollama'
+          ? await this.probeOllama(model)
+          : await this.probeCloud(service, stored);
+      return { ...probe, online: probe.reachable && probe.modelReady };
+    } catch {
+      return {
+        reachable: false,
+        modelReady: false,
+        online: false,
+        detail: 'El servicio no responde',
+      };
+    }
+  }
+
+  private async probeOllama(model: string) {
+    const creds = this.resolveCredentials(findService('ollama') ?? AI_SERVICES[0], null);
+    const root = (creds.baseUrl ?? 'http://127.0.0.1:11434').replace(/\/v1$/, '');
+    const response = await fetch(`${root}/api/tags`, {
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!response.ok) {
+      return { reachable: false, modelReady: false, detail: 'El modelo local no responde' };
+    }
+    const body = (await response.json().catch(() => ({}))) as {
+      models?: Array<{ name?: string }>;
+    };
+    const names = (body.models ?? []).map((item) => item.name ?? '');
+    const ready = names.some(
+      (name) => name === model || name.startsWith(`${model}`) || name.split(':')[0] === model.split(':')[0],
+    );
+    return {
+      reachable: true,
+      modelReady: ready,
+      detail: ready ? 'Modelo disponible' : `Falta descargar ${model}`,
+    };
+  }
+
+  private async probeCloud(service: AiServiceDef, stored: StoredAiSettings | null) {
+    const creds = this.resolveCredentials(service, stored);
+    if (service.transport === 'anthropic') {
+      const response = await fetch('https://api.anthropic.com/v1/models', {
+        headers: {
+          'x-api-key': creds.apiKey ?? '',
+          'anthropic-version': '2023-06-01',
+        },
+        signal: AbortSignal.timeout(5000),
+      });
+      return {
+        reachable: response.ok,
+        modelReady: response.ok,
+        detail: response.ok ? 'API activa' : 'La API no responde o la clave no es válida',
+      };
+    }
+    const base = (creds.baseUrl ?? '').replace(/\/$/, '');
+    if (!base) {
+      return { reachable: false, modelReady: false, detail: 'Falta la URL del modelo' };
+    }
+    const response = await fetch(`${base}/models`, {
+      headers: creds.apiKey ? { Authorization: `Bearer ${creds.apiKey}` } : {},
+      signal: AbortSignal.timeout(5000),
+    });
+    return {
+      reachable: response.ok,
+      modelReady: response.ok,
+      detail: response.ok ? 'API activa' : 'La API no responde o la clave no es válida',
+    };
   }
 
   private isServiceConfigured(
@@ -405,11 +635,11 @@ export class AiService {
         ).replace(/\/$/, ''),
       };
     }
-    const fromDb = stored?.service === service.id ? stored : null;
+    const saved = stored?.vault[service.id];
     return {
-      apiKey: fromDb?.apiKey?.trim() || this.firstKey(service.keyEnv),
+      apiKey: saved?.apiKey?.trim() || this.firstKey(service.keyEnv),
       baseUrl: (
-        fromDb?.baseUrl ||
+        saved?.baseUrl ||
         service.baseUrl ||
         this.config.get<string>('AI_COMPAT_BASE_URL') ||
         ''
@@ -463,7 +693,7 @@ export class AiService {
   private modelName(provider: AiProvider): string {
     switch (provider) {
       case 'ollama':
-        return 'qwen2.5:14b';
+        return 'qwen3.5:4b';
       case 'openai':
         return this.config.get<string>('OPENAI_MODEL')?.trim() || 'gpt-5.6';
       case 'anthropic':
@@ -489,16 +719,26 @@ export class AiService {
     facts: string;
     snapshot: HostSnapshot | null;
   }> {
+    const scope = this.questionScope(question);
     const agents = await this.listConnectedAgents(tenantId);
-    const named = this.extractAgentId(question);
+    const named = this.extractAgentId(question, agents);
+    const needsHost =
+      scope.cpu ||
+      scope.load ||
+      scope.memory ||
+      scope.network ||
+      scope.logs ||
+      scope.traces;
     const targetIds = named
       ? [named]
-      : agents.slice(0, 5).map((item) => item.agentId);
+      : needsHost
+        ? agents.slice(0, 5).map((item) => item.agentId)
+        : [];
     const snapshots = (
-      await Promise.all(targetIds.map((id) => this.snapshot(id, tenantId)))
+      await Promise.all(targetIds.map((id) => this.snapshot(id, tenantId, scope)))
     ).filter((item): item is HostSnapshot => Boolean(item));
     return {
-      facts: this.contextFacts(agents, snapshots),
+      facts: this.contextFacts(agents, snapshots, scope, Boolean(named)),
       snapshot: snapshots[0] ?? null,
     };
   }
@@ -533,23 +773,29 @@ export class AiService {
   private contextFacts(
     agents: Array<{ agentId: string; tenantId: string | null; siteId: string | null }>,
     snapshots: HostSnapshot[],
+    scope: FactScope,
+    namedHost: boolean,
   ): string {
     const lines = [
-      'Laboratorio Ekumetrics. Estos hechos salen de Prometheus ahora.',
-      'Usted es los ojos expertos del equipo. La lectura_experta ya clasifica cada host.',
-      `agentes_conectados=${agents.length}`,
+      'Ficha medida. Usa estos numeros. No los contradigas.',
+      'Responde solo la pregunta. No listes toda la ficha.',
+      'Si el dato pedido no esta, di que no hay medicion. No hables de integraciones.',
+      'Si los valores estan en rango normal, no inventes un incidente.',
     ];
-    if (!agents.length) {
-      lines.push('No hay ekms_agent_identity. El agente no esta reportando.');
-    } else {
-      for (const agent of agents) {
-        lines.push(
-          `- agent_id=${agent.agentId} tenant=${agent.tenantId ?? 'sin datos'} site=${agent.siteId ?? 'sin datos'}`,
-        );
+    if (!namedHost) {
+      lines.push(`agentes_conectados=${agents.length}`);
+      if (!agents.length) {
+        lines.push('Ningun agente esta reportando ahora.');
+      } else {
+        for (const agent of agents) {
+          lines.push(
+            `- agent_id=${agent.agentId} tenant=${agent.tenantId ?? 'sin datos'} site=${agent.siteId ?? 'sin datos'}`,
+          );
+        }
       }
     }
     for (const snapshot of snapshots) {
-      const host = this.factsText(snapshot);
+      const host = this.factsText(snapshot, scope);
       if (host) {
         lines.push('', host);
       }
@@ -557,17 +803,59 @@ export class AiService {
     return lines.join('\n');
   }
 
-  private extractAgentId(question: string): string | null {
+  private fullScope(): FactScope {
+    return {
+      cpu: true,
+      load: true,
+      memory: true,
+      network: true,
+      logs: true,
+      traces: false,
+      forecast: true,
+      hourStats: true,
+    };
+  }
+
+  private questionScope(question: string): FactScope {
+    const q = question.toLowerCase();
+    const logs = /\b(logs?|registros?|eventos?|journal|syslog)\b/.test(q);
+    const traces = /\b(trazas?|transacci[oó]n(?:es)?)\b/.test(q);
+    const forecast = /\b(proyecci[oó]n|pron[oó]stico|tendencia)\b/.test(q);
+    const hourStats = /\b(1\s*h|una hora|[uú]ltima hora|60\s*min)\b/.test(q);
+    const listing = /\b(qu[eé] agentes|agentes tengo|agentes conectados)\b/.test(q);
+    const host = !listing;
+    return {
+      cpu: host,
+      load: host,
+      memory: host,
+      network: host,
+      logs,
+      traces,
+      forecast: forecast || hourStats,
+      hourStats,
+    };
+  }
+
+  private extractAgentId(
+    question: string,
+    agents: Array<{ agentId: string }> = [],
+  ): string | null {
     const labeled = question.match(/agent_id\s*[:=]\s*["']?([A-Za-z0-9._-]+)/i);
     if (labeled?.[1]) {
       return labeled[1];
     }
-    const named = question.match(/agente\s+([A-Za-z0-9._-]+)/i);
+    const named = question.match(
+      /\b(?:agente|host|servidor|nodo)\s+([A-Za-z0-9._-]+)/i,
+    );
     if (named?.[1]) {
       return named[1];
     }
-    const dashed = question.match(/\b(agent-[A-Za-z0-9._-]+)\b/i);
-    return dashed?.[1] ?? null;
+    const dashed = question.match(/\b(agent-[A-Za-z0-9._-]+|srv-[A-Za-z0-9._-]+)\b/i);
+    if (dashed?.[1]) {
+      return dashed[1];
+    }
+    const lower = question.toLowerCase();
+    return agents.find((item) => lower.includes(item.agentId.toLowerCase()))?.agentId ?? null;
   }
 
   private async promInstant(
@@ -677,12 +965,24 @@ export class AiService {
       found: false,
       tenantId: null,
       siteId: null,
+      mode: null,
       cpus: null,
       cpuHostPercent: null,
+      cpuByState: [],
       load1m: null,
       load5m: null,
       load15m: null,
       memoryUsedPercent: null,
+      memoryUsedBytes: null,
+      memoryTotalBytes: null,
+      diskUsedBytes: null,
+      diskTotalBytes: null,
+      networkReceiveBps: null,
+      networkTransmitBps: null,
+      networkErrorsPerSec: null,
+      networkDropsPerSec: null,
+      uptimeSeconds: null,
+      modules: [],
       logs: { source: '{service_name="ekumetrics-agent"}', lines: [] },
       forecast: {
         method: 'linear-15m',
@@ -692,13 +992,13 @@ export class AiService {
       },
       assessment: {
         verdict: 'anomaly',
-        findings: ['El agente no reporta metricas en Prometheus.'],
+        findings: ['El agente no reporta metricas.'],
         cpuAvg1h: null,
         cpuMax1h: null,
       },
       traces: {
         available: false,
-        note: 'Las trazas solo van al exporter debug. Falta un backend (Tempo).',
+        note: 'Trazas no disponibles.',
       },
     };
   }
@@ -737,7 +1037,7 @@ export class AiService {
     if (!host.found) {
       return {
         verdict: 'anomaly',
-        findings: ['Sin series de este agente en Prometheus.'],
+        findings: ['Sin series de este agente.'],
         cpuAvg1h: stats.avg,
         cpuMax1h: stats.max,
       };
@@ -779,7 +1079,7 @@ export class AiService {
       raise('watch');
     }
     if (!findings.length) {
-      findings.push('CPU, load y memoria estan dentro de lo visto en la ultima hora.');
+      findings.push('Los valores medidos estan en rango normal.');
     }
     return {
       verdict,
@@ -794,49 +1094,133 @@ export class AiService {
   }
 
   private composeAnalysis(_snapshot: HostSnapshot | null, explanation: string): string {
-    return this.plainReply(explanation);
+    return sanitizeAssistantReply(explanation);
   }
 
-  private plainReply(text: string): string {
-    const marker = 'Explicacion:';
-    const index = text.indexOf(marker);
-    let value = (index >= 0 ? text.slice(index + marker.length) : text).trim();
-    value = value.replace(/\*\*?/g, '');
-    value = value.replace(/__/g, '');
-    value = value.replace(/`+/g, '');
-    value = value.replace(/^#{1,6}\s+/gm, '');
-    value = value.replace(/^\s*-{3,}\s*$/gm, '');
-    value = value.replace(/^lectura_experta:\s*/gim, '');
-    return value.replace(/\n{3,}/g, '\n\n').trim();
+  private formatGib(bytes: number | null): string {
+    if (bytes === null || !Number.isFinite(bytes) || bytes < 0) {
+      return 'sin datos';
+    }
+    return `${(bytes / 1024 ** 3).toFixed(2)} GiB`;
   }
 
-  private factsText(snapshot: HostSnapshot | null): string {
+  private formatRate(bytesPerSec: number | null): string {
+    if (bytesPerSec === null || !Number.isFinite(bytesPerSec) || bytesPerSec < 0) {
+      return 'sin datos';
+    }
+    if (bytesPerSec >= 1024 ** 2) {
+      return `${(bytesPerSec / 1024 ** 2).toFixed(2)} MiB/s`;
+    }
+    if (bytesPerSec >= 1024) {
+      return `${(bytesPerSec / 1024).toFixed(2)} KiB/s`;
+    }
+    return `${bytesPerSec.toFixed(2)} B/s`;
+  }
+
+  private formatPerSec(value: number | null): string {
+    if (value === null || !Number.isFinite(value) || value < 0) {
+      return 'sin datos';
+    }
+    return `${value.toFixed(2)} /s`;
+  }
+
+  private formatDuration(seconds: number | null): string {
+    if (seconds === null || !Number.isFinite(seconds) || seconds < 0) {
+      return 'sin datos';
+    }
+    const total = Math.floor(seconds);
+    const days = Math.floor(total / 86400);
+    const hours = Math.floor((total % 86400) / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    if (days > 0) {
+      return `${days}d ${hours}h`;
+    }
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  }
+
+  private factsText(snapshot: HostSnapshot | null, scope: FactScope): string {
     if (!snapshot?.found) {
       return '';
     }
     const pct = (n: number | null) => (n === null ? 'sin datos' : `${n.toFixed(2)}%`);
     const num = (n: number | null, digits = 2) =>
       n === null ? 'sin datos' : n.toFixed(digits);
-    return [
-      'Hechos de Prometheus. Usa estos numeros; no los contradigas ni relances las mismas queries.',
-      `agent_id=${snapshot.agentId}`,
-      `tenant_id=${snapshot.tenantId ?? 'sin datos'}`,
-      `site_id=${snapshot.siteId ?? 'sin datos'}`,
-      `cpus=${num(snapshot.cpus, 0)}`,
-      `cpu_host=${pct(snapshot.cpuHostPercent)}`,
-      `load_1m=${num(snapshot.load1m)}`,
-      `load_5m=${num(snapshot.load5m)}`,
-      `load_15m=${num(snapshot.load15m)}`,
-      `memoria_usada=${pct(snapshot.memoryUsedPercent)}`,
-      `cpu_media_1h=${pct(snapshot.assessment.cpuAvg1h)}`,
-      `cpu_max_1h=${pct(snapshot.assessment.cpuMax1h)}`,
-      `cpu_host_en_15m=${pct(snapshot.forecast.cpuHostIn15m)} (${snapshot.forecast.note})`,
-      `lectura_experta=${snapshot.assessment.verdict}`,
-      ...snapshot.assessment.findings.map((item) => `- hallazgo: ${item}`),
-      `logs=${snapshot.logs.lines.length} lineas ${snapshot.logs.source}`,
-      ...snapshot.logs.lines.map((line) => `- ${line}`),
-      `trazas=${snapshot.traces.available ? 'si' : 'no'}. ${snapshot.traces.note}`,
-    ].join('\n');
+    const diskPercent =
+      snapshot.diskUsedBytes !== null &&
+      snapshot.diskTotalBytes !== null &&
+      snapshot.diskTotalBytes > 0
+        ? (snapshot.diskUsedBytes / snapshot.diskTotalBytes) * 100
+        : null;
+    const lines = [`agent_id=${snapshot.agentId}`];
+    if (snapshot.mode) {
+      lines.push(`modo=${snapshot.mode}`);
+    }
+    if (scope.cpu) {
+      lines.push(`cpus=${num(snapshot.cpus, 0)}`, `cpu_host=${pct(snapshot.cpuHostPercent)}`);
+      for (const item of snapshot.cpuByState) {
+        lines.push(`cpu_${item.state}=${item.percent.toFixed(2)}%`);
+      }
+    }
+    if (scope.load) {
+      lines.push(
+        `load_1m=${num(snapshot.load1m)}`,
+        `load_5m=${num(snapshot.load5m)}`,
+        `load_15m=${num(snapshot.load15m)}`,
+      );
+    }
+    if (scope.memory) {
+      lines.push(
+        `memoria_total=${this.formatGib(snapshot.memoryTotalBytes)}`,
+        `memoria_usada=${this.formatGib(snapshot.memoryUsedBytes)} (${pct(snapshot.memoryUsedPercent)})`,
+      );
+    }
+    if (scope.cpu || scope.memory) {
+      lines.push(
+        `disco_raiz_total=${this.formatGib(snapshot.diskTotalBytes)}`,
+        `disco_raiz_usado=${this.formatGib(snapshot.diskUsedBytes)} (${pct(diskPercent)})`,
+        `uptime=${this.formatDuration(snapshot.uptimeSeconds)}`,
+        `modulos=${snapshot.modules.length ? snapshot.modules.join(', ') : 'sin datos'}`,
+      );
+    }
+    if (scope.network) {
+      lines.push(
+        `red_rx=${this.formatRate(snapshot.networkReceiveBps)}`,
+        `red_tx=${this.formatRate(snapshot.networkTransmitBps)}`,
+        `red_errores=${this.formatPerSec(snapshot.networkErrorsPerSec)}`,
+        `red_descartes=${this.formatPerSec(snapshot.networkDropsPerSec)}`,
+      );
+    }
+    if (scope.hourStats) {
+      lines.push(
+        `cpu_media_1h=${pct(snapshot.assessment.cpuAvg1h)}`,
+        `cpu_max_1h=${pct(snapshot.assessment.cpuMax1h)}`,
+      );
+    }
+    if (scope.forecast) {
+      lines.push(
+        `cpu_host_en_15m=${pct(snapshot.forecast.cpuHostIn15m)} (${snapshot.forecast.note})`,
+      );
+    }
+    if (scope.cpu || scope.load || scope.memory) {
+      for (const item of snapshot.assessment.findings) {
+        lines.push(`- ${item}`);
+      }
+    }
+    if (scope.logs) {
+      lines.push(`registros=${snapshot.logs.lines.length} lineas`);
+      for (const line of snapshot.logs.lines) {
+        lines.push(`- ${line}`);
+      }
+    }
+    if (scope.traces) {
+      lines.push(
+        `trazas=${snapshot.traces.available ? 'si' : 'no'}. ${snapshot.traces.note}`,
+      );
+    }
+    return lines.join('\n');
   }
 
   private async callHolmes(question: string, facts: string, model: string, customPrompt?: string | null) {
@@ -857,7 +1241,7 @@ export class AiService {
       });
     } catch {
       throw new ServiceUnavailableException(
-        'HolmesGPT no responde. Arranque el perfil ai y Ollama en 0.0.0.0:11434.',
+        'El asistente no responde. El modelo local no está disponible.',
       );
     }
 

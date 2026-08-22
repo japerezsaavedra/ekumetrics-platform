@@ -6,7 +6,7 @@ import { TenantService } from '../../core/tenant';
 import { EkuErrorStateComponent } from '../../shared/eku/error-state/eku-error-state';
 import { EkuPageHeaderComponent } from '../../shared/eku/page-header/eku-page-header';
 
-const FALLBACK_VERSION = '1.4.0';
+const FALLBACK_VERSION = '1.4.1';
 const RELEASES_REPO = 'japerezsaavedra/ekumetrics-agent-releases';
 const RELEASES_API = `https://api.github.com/repos/${RELEASES_REPO}/releases/latest`;
 const RELEASES_PAGE = `https://github.com/${RELEASES_REPO}/releases`;

@@ -163,6 +163,7 @@ model AiSettings {
   model        String
   apiKey       String?
   baseUrl      String?
+  vault        Json?
   systemPrompt String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
