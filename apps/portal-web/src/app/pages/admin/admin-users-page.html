@@ -9,7 +9,13 @@
   </eku-page-header>
 
   @if (formOpen()) {
-    <form class="eku-form" [formGroup]="form" (ngSubmit)="submit()">
+    <form
+      class="eku-form"
+      [class.eku-form--4]="isOperator()"
+      [class.eku-form--3]="!isOperator()"
+      [formGroup]="form"
+      (ngSubmit)="submit()"
+    >
       @if (isOperator()) {
         <label class="eku-field">
           <span>Tenant</span>
@@ -49,32 +55,49 @@
         <small></small>
       </label>
       <button type="submit" [disabled]="saving()">
-        {{ saving() ? 'Guardando…' : 'Agregar usuario' }}
+        {{ saving() ? 'Guardando…' : editingId() ? 'Guardar usuario' : 'Agregar usuario' }}
       </button>
     </form>
+  }
+
+  @if (created(); as account) {
+    <article class="admin-users__secret">
+      <p>Usuario creado en Keycloak. Entregue esta clave; no se vuelve a mostrar.</p>
+      <p><strong>{{ account.email }}</strong></p>
+      <p class="admin-users__password">{{ account.temporaryPassword }}</p>
+    </article>
   }
 
   @if (error(); as message) {
     <eku-error-state [message]="message" />
   }
 
-  <div class="admin-users__table">
-    <div class="admin-users__row admin-users__row--head">
+  <div class="eku-grid-table">
+    <div class="eku-grid-table__row eku-grid-table__row--4 eku-grid-table__row--head">
       <span>Usuario</span>
       <span>Tenant</span>
       <span>Rol</span>
+      <span></span>
     </div>
     @for (item of items(); track item.id) {
-      <div class="admin-users__row">
-        <span>
+      <div class="eku-grid-table__row eku-grid-table__row--4">
+        <span class="eku-grid-table__who">
           <strong>{{ item.displayName }}</strong>
           <small>{{ item.email }}</small>
         </span>
         <span>{{ item.tenant.name }} · {{ item.tenant.slug }}</span>
         <span>{{ item.role }}</span>
+        <span class="eku-grid-table__actions">
+          <button type="button" class="eku-icon-btn" matTooltip="Editar" (click)="edit(item)" aria-label="Editar usuario">
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button type="button" class="eku-icon-btn eku-icon-btn--danger" matTooltip="Eliminar" (click)="remove(item)" aria-label="Eliminar usuario">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </span>
       </div>
     } @empty {
-      <p class="admin-users__hint">Aun no hay usuarios registrados.</p>
+      <p class="eku-grid-table__empty">Aun no hay usuarios registrados.</p>
     }
   </div>
 </section>

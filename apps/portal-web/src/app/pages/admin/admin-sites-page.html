@@ -1,7 +1,7 @@
 <section class="admin-sites">
   <eku-page-header
     title="Sitios"
-    [subtitle]="'El administrador de ' + tenantSlug() + ' separa sedes. El agent.site del YAML debe coincidir con el slug.'"
+    [subtitle]="'Sedes de ' + tenantSlug() + '. El slug debe coincidir con agent.site. Un servidor se inscribe como tipo Servidor.'"
   >
     <div ekuActions class="admin-sites__actions">
       <button type="button" class="eku-add" (click)="toggleSite()">
@@ -14,7 +14,7 @@
   </eku-page-header>
 
   @if (siteOpen()) {
-    <form class="eku-form" [formGroup]="siteForm" (ngSubmit)="submitSite()">
+    <form class="eku-form eku-form--2" [formGroup]="siteForm" (ngSubmit)="submitSite()">
       <label class="eku-field">
         <span>Nombre</span>
         <input type="text" formControlName="name" placeholder="Planta Norte" />
@@ -26,13 +26,13 @@
         <small>{{ fieldInvalid('site', 'slug') ? 'Solo minusculas, numeros, punto, guion o _.' : '' }}</small>
       </label>
       <button type="submit" [disabled]="saving()">
-        {{ saving() ? 'Creando…' : 'Crear sitio' }}
+        {{ saving() ? 'Guardando…' : editingSiteId() ? 'Guardar sitio' : 'Crear sitio' }}
       </button>
     </form>
   }
 
   @if (agentOpen()) {
-    <form class="eku-form" [formGroup]="agentForm" (ngSubmit)="submitAgent()">
+    <form class="eku-form eku-form--3" [formGroup]="agentForm" (ngSubmit)="submitAgent()">
       <label class="eku-field">
         <span>agentId</span>
         <input type="text" formControlName="agentId" placeholder="agent-planta-norte-01" />
@@ -48,17 +48,29 @@
         <small>{{ fieldInvalid('agent', 'siteId') ? 'Seleccione un sitio.' : '' }}</small>
       </label>
       <label class="eku-field">
-        <span>Modo</span>
+        <span class="admin-sites__type">
+          Tipo
+          <button
+            type="button"
+            class="admin-sites__help"
+            [matTooltip]="modeHelp"
+            matTooltipClass="eku-hint-tooltip"
+            matTooltipPosition="right"
+            aria-label="Ayuda sobre el tipo de agente"
+            (click)="$event.preventDefault()"
+          >
+            <mat-icon>help_outline</mat-icon>
+          </button>
+        </span>
         <select formControlName="mode">
-          <option value="site">site</option>
-          <option value="central">central</option>
-          <option value="sensor">sensor</option>
-          <option value="endpoint">endpoint</option>
+          @for (item of modes; track item.value) {
+            <option [value]="item.value">{{ item.label }}</option>
+          }
         </select>
         <small></small>
       </label>
       <button type="submit" [disabled]="saving()">
-        {{ saving() ? 'Agregando…' : 'Agregar agente' }}
+        {{ saving() ? 'Guardando…' : editingAgentId() ? 'Guardar agente' : 'Agregar agente' }}
       </button>
     </form>
   }
@@ -68,23 +80,77 @@
   }
 
   @if (enrolled(); as item) {
-    <article class="admin-sites__yaml">
-      <p>Pegue esto en /etc/ekumetrics-agent/agent.yaml y reinicie el servicio.</p>
-      <pre>{{ item.yaml }}</pre>
+    <article class="admin-sites__ready">
+      <p>Agente {{ item.agentId }} inscrito. Descargue agent.yaml y colóquelo en /etc/ekumetrics-agent/.</p>
+      <button
+        type="button"
+        class="admin-sites__download"
+        (click)="downloadYaml(item)"
+        matTooltip="Descargar agent.yaml"
+        matTooltipPosition="above"
+        aria-label="Descargar agent.yaml"
+      >
+        <mat-icon>download</mat-icon>
+      </button>
     </article>
   }
 
-  <div class="admin-sites__list">
+  <div class="eku-grid-table">
+    <div class="eku-grid-table__row eku-grid-table__row--4 eku-grid-table__row--head">
+      <span>Sitio</span>
+      <span>Slug</span>
+      <span>Agentes</span>
+      <span></span>
+    </div>
     @for (item of items(); track item.id) {
-      <article class="admin-sites__card">
-        <header>
+      <div class="eku-grid-table__row eku-grid-table__row--4">
+        <span class="eku-grid-table__who">
           <strong>{{ item.name }}</strong>
-          <span>{{ item.slug }}</span>
-        </header>
-        <p>{{ item.agentCount ?? 0 }} agentes</p>
-      </article>
+        </span>
+        <span>{{ item.slug }}</span>
+        <span>{{ item.agentCount ?? 0 }}</span>
+        <span class="eku-grid-table__actions">
+          <button type="button" class="eku-icon-btn" matTooltip="Editar" (click)="editSite(item)" aria-label="Editar sitio">
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button type="button" class="eku-icon-btn eku-icon-btn--danger" matTooltip="Eliminar" (click)="removeSite(item)" aria-label="Eliminar sitio">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </span>
+      </div>
     } @empty {
-      <p class="admin-sites__hint">Este tenant aun no tiene sitios. Agregue el primero.</p>
+      <p class="eku-grid-table__empty">Este tenant aun no tiene sitios. Agregue el primero.</p>
+    }
+  </div>
+
+  <div class="eku-grid-table admin-sites__agents">
+    <div class="eku-grid-table__row eku-grid-table__row--4 eku-grid-table__row--head">
+      <span>Agente</span>
+      <span>Sitio</span>
+      <span>Tipo</span>
+      <span></span>
+    </div>
+    @for (item of agents(); track item.id) {
+      <div class="eku-grid-table__row eku-grid-table__row--4">
+        <span class="eku-grid-table__who">
+          <strong>{{ item.agentId }}</strong>
+        </span>
+        <span>{{ item.siteId }}</span>
+        <span>{{ modeLabel(item.mode) }}</span>
+        <span class="eku-grid-table__actions">
+          <button type="button" class="eku-icon-btn" matTooltip="Descargar agent.yaml" (click)="downloadYaml(item)" aria-label="Descargar agent.yaml">
+            <mat-icon>download</mat-icon>
+          </button>
+          <button type="button" class="eku-icon-btn" matTooltip="Editar" (click)="editAgent(item)" aria-label="Editar agente">
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button type="button" class="eku-icon-btn eku-icon-btn--danger" matTooltip="Eliminar" (click)="removeAgent(item)" aria-label="Eliminar agente">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </span>
+      </div>
+    } @empty {
+      <p class="eku-grid-table__empty">Este tenant aun no tiene agentes.</p>
     }
   </div>
 </section>

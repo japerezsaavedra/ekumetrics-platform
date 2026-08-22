@@ -29,6 +29,9 @@ export type DashboardHostOption = {
   id: string;
   siteId: string | null;
   tenantId: string | null;
+  mode?: string | null;
+  version?: string | null;
+  online?: boolean | null;
   cpuUsed?: number | null;
   memoryUsed?: number | null;
   uptimeSeconds?: number | null;

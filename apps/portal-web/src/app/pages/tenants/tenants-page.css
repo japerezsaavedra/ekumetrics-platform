@@ -7,6 +7,25 @@
   color: var(--eku-text-secondary);
 }
 
+.tenants__secret {
+  margin: 0 0 var(--eku-space-5);
+  padding: var(--eku-space-4);
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface);
+}
+
+.tenants__secret p {
+  margin: 0 0 var(--eku-space-2);
+  color: var(--eku-text-secondary);
+}
+
+.tenants__password {
+  margin: 0;
+  color: var(--eku-text-primary);
+  font-family: var(--eku-font-mono);
+  font-size: 1.1rem;
+}
+
 .tenants__list {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -35,8 +54,15 @@
   color: var(--eku-text-secondary);
 }
 
-.tenants__card button {
+.tenants__card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--eku-space-2);
   margin-top: auto;
+}
+
+.tenants__card-actions > button:first-child {
+  flex: 1;
   min-height: 2.25rem;
   border: 1px solid var(--eku-border);
   background: transparent;

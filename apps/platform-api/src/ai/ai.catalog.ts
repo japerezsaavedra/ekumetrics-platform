@@ -29,8 +29,8 @@ export const AI_SERVICES: AiServiceDef[] = [
     id: 'openai',
     label: 'OpenAI (ChatGPT API)',
     transport: 'openai',
-    models: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini'],
-    defaultModel: 'gpt-4.1-mini',
+    models: ['gpt-5.6', 'gpt-5.6-terra', 'gpt-5.6-luna'],
+    defaultModel: 'gpt-5.6',
     baseUrl: 'https://api.openai.com/v1',
     keyEnv: ['OPENAI_API_KEY'],
     hint: 'Pegue la clave sk- y elija el modelo.',
@@ -39,8 +39,8 @@ export const AI_SERVICES: AiServiceDef[] = [
     id: 'anthropic',
     label: 'Claude (Anthropic)',
     transport: 'anthropic',
-    models: ['claude-sonnet-4-5', 'claude-opus-4-5'],
-    defaultModel: 'claude-sonnet-4-5',
+    models: ['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5'],
+    defaultModel: 'claude-sonnet-5',
     keyEnv: ['ANTHROPIC_API_KEY'],
     hint: 'Pegue la clave sk-ant- y elija el modelo.',
   },
@@ -58,7 +58,7 @@ export const AI_SERVICES: AiServiceDef[] = [
     id: 'grok',
     label: 'Grok (xAI)',
     transport: 'openai_compat',
-    models: ['grok-4.6', 'grok-4'],
+    models: ['grok-4.6', 'grok-4.5', 'grok-4.3'],
     defaultModel: 'grok-4.6',
     baseUrl: 'https://api.x.ai/v1',
     keyEnv: ['XAI_API_KEY'],
@@ -87,8 +87,8 @@ export const AI_SERVICES: AiServiceDef[] = [
 
 export const HOLMES_MODEL_KEYS: Record<AiProvider, string> = {
   ollama: 'qwen2.5:14b',
-  openai: 'gpt-4.1-mini',
-  anthropic: 'claude-sonnet-4-5',
+  openai: 'gpt-5.6',
+  anthropic: 'claude-sonnet-5',
   openai_compat: 'openai-compatible',
 };
 

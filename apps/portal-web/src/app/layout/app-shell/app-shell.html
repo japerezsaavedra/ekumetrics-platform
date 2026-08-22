@@ -1,3 +1,6 @@
+@if (isLogin()) {
+  <router-outlet />
+} @else {
 <div class="shell" [class.is-kiosk]="kioskOn()">
   <mat-toolbar class="shell__navbar">
     <div class="shell__navbar-start">
@@ -15,7 +18,7 @@
     </div>
     <span class="shell__spacer"></span>
     <div class="shell__navbar-end">
-      @if (tenantOptions().length > 0) {
+      @if (isOperator() && tenantOptions().length > 0) {
         <label class="shell__tenant">
           <span>Tenant</span>
           <select [formControl]="tenantControl">
@@ -24,6 +27,9 @@
             }
           </select>
         </label>
+      }
+      @if (userEmail()) {
+        <span class="shell__user">{{ userName() }}</span>
       }
       <button
         matIconButton
@@ -126,3 +132,4 @@
     </mat-sidenav-content>
   </mat-sidenav-container>
 </div>
+}

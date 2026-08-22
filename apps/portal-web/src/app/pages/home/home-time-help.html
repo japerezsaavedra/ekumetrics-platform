@@ -1,0 +1,43 @@
+<button
+  type="button"
+  class="home-time-help__btn"
+  [matMenuTriggerFor]="menu"
+  matTooltip="Qué rango y refresco usar"
+  matTooltipPosition="below"
+  aria-label="Ayuda sobre rango y refresco"
+>
+  <mat-icon>help_outline</mat-icon>
+</button>
+
+<mat-menu #menu="matMenu" class="eku-hint-panel">
+  <div class="home-time-help__panel" (click)="$event.stopPropagation()">
+    <h4>Rango y refresco</h4>
+    <p>
+      El agente recolecta cada 30 s. Ese es el ritmo del dato: el default pide a Prometheus
+      con la misma cadencia. Refrescar más rápido no trae muestras nuevas, solo redibuja.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Rango</th>
+          <th>Refresco</th>
+          <th>Para qué</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of advice; track item.range) {
+          <tr [class.is-pick]="item.recommended">
+            <td>{{ item.range }}</td>
+            <td>{{ item.refresh }}</td>
+            <td>{{ item.purpose }}{{ item.recommended ? ' (recomendado)' : '' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <p class="home-time-help__note">
+      Live 1s solo en 1 y 5 min. En ventanas grandes el eje avanza menos de un pixel por segundo.
+      CPU y red varían más seguido que 30 s porque se calculan como tasa; memoria y disco cambian
+      al llegar la muestra.
+    </p>
+  </div>
+</mat-menu>

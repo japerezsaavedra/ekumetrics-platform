@@ -53,7 +53,7 @@ export class TelemetryClient {
       end: String(end),
       step: String(step),
     }).toString()}`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
     const body = (await response.json()) as {
       data?: {
         result?: Array<{
@@ -83,7 +83,7 @@ export class TelemetryClient {
       end: String(end),
       step: String(step),
     }).toString()}`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
     const body = (await response.json()) as {
       data?: { result?: Array<{ values?: Array<[number | string, string]> }> };
     };
@@ -103,7 +103,7 @@ export class TelemetryClient {
       limit: String(limit),
       direction: 'backward',
     }).toString()}`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
     const body = (await response.json()) as {
       data?: { result?: Array<{ values?: Array<[string, string]> }> };
     };

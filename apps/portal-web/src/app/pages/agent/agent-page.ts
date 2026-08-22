@@ -6,7 +6,7 @@ import { TenantService } from '../../core/tenant';
 import { EkuErrorStateComponent } from '../../shared/eku/error-state/eku-error-state';
 import { EkuPageHeaderComponent } from '../../shared/eku/page-header/eku-page-header';
 
-const FALLBACK_VERSION = '1.3.2';
+const FALLBACK_VERSION = '1.4.0';
 const RELEASES_REPO = 'japerezsaavedra/ekumetrics-agent-releases';
 const RELEASES_API = `https://api.github.com/repos/${RELEASES_REPO}/releases/latest`;
 const RELEASES_PAGE = `https://github.com/${RELEASES_REPO}/releases`;
@@ -85,7 +85,7 @@ const MODULE_GROUPS: ModuleGroup[] = [
         key: 'metrics.host',
         name: 'Host',
         icon: 'memory',
-        capability: 'CPU, memoria, disco, filesystem, load y NICs de esta maquina.',
+        capability: 'CPU, memoria, disco, filesystem, load y NICs de esta máquina.',
         onByDefault: true,
       },
       {
@@ -109,10 +109,10 @@ const MODULE_GROUPS: ModuleGroup[] = [
     label: 'Componentes de sede',
     modules: [
       {
-        key: 'metrics.snmp',
+        key: 'snmp.devices',
         name: 'SNMP',
         icon: 'router',
-        capability: 'Cualquier dispositivo v2c/v3 (puerto 161). Perfiles if-mib, host-mib, ups e icewarp.',
+        capability: 'Cualquier dispositivo v2c/v3 (puerto 161). Se declara en snmp.devices. Perfiles if-mib, host-mib, ups e icewarp.',
         onByDefault: false,
       },
       {
@@ -140,13 +140,13 @@ const MODULE_GROUPS: ModuleGroup[] = [
   },
   {
     id: 'sap',
-    label: 'SAP',
+    label: 'SAP (sensor)',
     modules: [
       {
         key: 'sap',
         name: 'Canal SAP',
         icon: 'lan',
-        capability: 'SPAN/PCAP o TAP: sesiones, bytes, RTT y retransmisiones. Sin acceso admin a SAP.',
+        capability: 'Solo en mode: sensor (SPAN/PCAP o TAP). Sesiones, bytes, RTT y retransmisiones. No va en el YAML de sede.',
         onByDefault: false,
       },
       {
@@ -160,7 +160,7 @@ const MODULE_GROUPS: ModuleGroup[] = [
         key: 'sap.work',
         name: 'Trabajo SAP',
         icon: 'assignment',
-        capability: 'Transaccion y usuario seudonimizado desde un fichero JSONL autorizado.',
+        capability: 'Transacción y usuario seudonimizado desde un fichero JSONL autorizado.',
         onByDefault: false,
       },
     ],
@@ -178,9 +178,9 @@ const MODULE_GROUPS: ModuleGroup[] = [
       },
       {
         key: 'metrics.otlp',
-        name: 'Metricas OTLP',
+        name: 'Métricas OTLP',
         icon: 'input',
-        capability: 'Recibe metricas de aplicaciones en :4317 / :4318.',
+        capability: 'Recibe métricas de aplicaciones en :4317 / :4318.',
         onByDefault: false,
       },
       {
@@ -234,14 +234,14 @@ const MODULE_GROUPS: ModuleGroup[] = [
         key: 'modules.discovery.active',
         name: 'Discovery activo',
         icon: 'travel_explore',
-        capability: 'Requiere authorized: true. En 1.3 no barre la red.',
+        capability: 'Requiere authorized: true. En 1.4 no barre la red.',
         onByDefault: false,
       },
       {
         key: 'probes',
         name: 'Sondas',
         icon: 'speed',
-        capability: 'ICMP o TCP: latencia, perdida y si el destino responde.',
+        capability: 'ICMP o TCP: latencia, pérdida y si el destino responde.',
         onByDefault: false,
       },
     ],
@@ -277,7 +277,7 @@ export class AgentPage {
   );
   protected readonly releaseLabel = computed(
     () =>
-      `Ekumetrics Agent ${this.catalogVersion()}. YAML por componente: snmp, databases, queues e icewarp.`,
+      `Ekumetrics Agent ${this.catalogVersion()} · linux/amd64`,
   );
 
   protected readonly cards = computed<InstallerCard[]>(() => {
@@ -306,7 +306,7 @@ export class AgentPage {
       },
       {
         id: 'tgz',
-        title: 'Linux generico',
+        title: 'Linux genérico',
         os: 'Linux',
         hint: `.tar.gz · x86_64 · v${version}`,
         icon: 'folder_zip',
@@ -363,7 +363,12 @@ export class AgentPage {
     if (Object.keys(live).length === 0) {
       return item.onByDefault;
     }
-    return live[item.key] === true;
+    return live[item.key] === true || live[this.reportedKey(item.key)] === true;
+  }
+
+  /** El YAML de 1.4 usa snmp.devices; la serie sigue siendo metrics.snmp. */
+  private reportedKey(key: string): string {
+    return key === 'snmp.devices' ? 'metrics.snmp' : key;
   }
 
   protected formatSize(bytes: number): string {

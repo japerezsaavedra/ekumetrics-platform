@@ -1,4 +1,6 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { AuthService } from '../../core/auth';
+import { TenantService } from '../../core/tenant';
 
 export type ChatMessage = {
   role: 'user' | 'assistant';
@@ -12,11 +14,13 @@ export type Conversation = {
   updatedAt: string;
 };
 
-const STORAGE_KEY = 'eku-assistant-conversations';
-const ACTIVE_KEY = 'eku-assistant-active';
+const STORAGE_PREFIX = 'eku-assistant-conversations';
+const ACTIVE_PREFIX = 'eku-assistant-active';
 
 @Injectable({ providedIn: 'root' })
 export class ConversationStore {
+  private readonly auth = inject(AuthService);
+  private readonly tenants = inject(TenantService);
   readonly conversations = signal<Conversation[]>([]);
   readonly activeId = signal<string | null>(null);
   readonly active = computed(() => {
@@ -25,7 +29,11 @@ export class ConversationStore {
   });
 
   constructor() {
-    this.restore();
+    effect(() => {
+      this.auth.email();
+      this.tenants.slug();
+      this.restore();
+    });
   }
 
   create(title = 'Nueva sesion'): Conversation {
@@ -74,11 +82,17 @@ export class ConversationStore {
   }
 
   private restore(): void {
+    const keys = this.keys();
+    if (!keys) {
+      this.conversations.set([]);
+      this.activeId.set(null);
+      return;
+    }
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(keys.list);
       const items = raw ? (JSON.parse(raw) as Conversation[]) : [];
       this.conversations.set(Array.isArray(items) ? items : []);
-      const active = localStorage.getItem(ACTIVE_KEY);
+      const active = localStorage.getItem(keys.active);
       this.activeId.set(
         items.some((item) => item.id === active) ? active : (items[0]?.id ?? null),
       );
@@ -89,12 +103,29 @@ export class ConversationStore {
   }
 
   private persist(): void {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.conversations()));
+    const keys = this.keys();
+    if (!keys) {
+      return;
+    }
+    localStorage.setItem(keys.list, JSON.stringify(this.conversations()));
     const active = this.activeId();
     if (active) {
-      localStorage.setItem(ACTIVE_KEY, active);
+      localStorage.setItem(keys.active, active);
     } else {
-      localStorage.removeItem(ACTIVE_KEY);
+      localStorage.removeItem(keys.active);
     }
+  }
+
+  private keys(): { list: string; active: string } | null {
+    const email = this.auth.email().trim().toLowerCase();
+    const tenant = this.tenants.slug().trim().toLowerCase();
+    if (!email || !tenant) {
+      return null;
+    }
+    const scope = `${email}:${tenant}`;
+    return {
+      list: `${STORAGE_PREFIX}:${scope}`,
+      active: `${ACTIVE_PREFIX}:${scope}`,
+    };
   }
 }

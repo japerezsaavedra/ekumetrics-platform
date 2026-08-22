@@ -4,63 +4,95 @@
 
 .admin-sites__actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--eku-space-2);
 }
 
-.admin-sites__hint {
-  margin: var(--eku-space-5) 0;
-  color: var(--eku-text-secondary);
+.admin-sites__agents {
+  margin-top: var(--eku-space-5);
 }
 
-.admin-sites__yaml {
+.admin-sites .eku-form {
+  margin-bottom: var(--eku-space-5);
+}
+
+.admin-sites__type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--eku-space-1);
+}
+
+.admin-sites .eku-field .admin-sites__help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  min-height: 1.25rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--eku-text-secondary);
+  cursor: pointer;
+}
+
+.admin-sites__help:hover,
+.admin-sites__help:focus-visible {
+  color: var(--eku-primary);
+}
+
+.admin-sites__help .mat-icon {
+  width: 1rem;
+  height: 1rem;
+  font-size: 1rem;
+}
+
+.admin-sites .eku-form > button[type='submit'] {
+  justify-self: end;
+  min-width: 11rem;
+}
+
+.admin-sites__ready {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--eku-space-3);
   margin: 0 0 var(--eku-space-5);
   padding: var(--eku-space-4);
   background: var(--eku-surface);
   border: 1px solid var(--eku-border);
 }
 
-.admin-sites__yaml p {
-  margin: 0 0 var(--eku-space-3);
+.admin-sites__ready p {
+  margin: 0;
   color: var(--eku-text-secondary);
 }
 
-.admin-sites__yaml pre {
-  margin: 0;
-  overflow: auto;
-  color: var(--eku-text-primary);
-  font-family: var(--eku-font-mono);
-  font-size: 0.85rem;
-}
-
-.admin-sites__list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--eku-space-4);
-}
-
-.admin-sites__card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--eku-space-3);
-  padding: var(--eku-space-4);
-  background: var(--eku-surface);
+.admin-sites .admin-sites__download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--eku-touch);
+  min-width: var(--eku-touch);
+  height: var(--eku-touch);
+  min-height: var(--eku-touch);
+  padding: 0;
   border: 1px solid var(--eku-border);
+  background: var(--eku-surface);
+  color: var(--eku-text-primary);
+  cursor: pointer;
 }
 
-.admin-sites__card header {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--eku-space-3);
+.admin-sites .admin-sites__download:hover,
+.admin-sites .admin-sites__download:focus-visible {
+  color: var(--eku-primary);
+  border-color: var(--eku-primary);
 }
 
-.admin-sites__card span,
-.admin-sites__card p {
-  margin: 0;
-  color: var(--eku-text-secondary);
-}
-
-@media (max-width: 47.99rem) {
-  .admin-sites__list {
-    grid-template-columns: 1fr;
-  }
+.admin-sites .admin-sites__download .mat-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  font-size: 1.25rem;
 }

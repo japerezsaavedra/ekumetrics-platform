@@ -27,6 +27,7 @@
         <input type="text" formControlName="emailDomain" placeholder="norte.cl" />
         <small>{{ fieldInvalid('emailDomain') ? 'Ejemplo: cliente.com. Sin @ ni espacios.' : '' }}</small>
       </label>
+      @if (!editingSlug()) {
       <label class="eku-field">
         <span>Administrador</span>
         <input type="text" formControlName="adminName" placeholder="Ana Perez" />
@@ -53,14 +54,23 @@
         <input type="text" formControlName="siteSlug" placeholder="local" />
         <small>{{ fieldInvalid('siteSlug') ? 'Solo minusculas, numeros, punto, guion o _.' : '' }}</small>
       </label>
+      }
       <button type="submit" [disabled]="saving()">
-        {{ saving() ? 'Creando…' : 'Crear tenant y administrador' }}
+        {{ saving() ? 'Guardando…' : editingSlug() ? 'Guardar tenant' : 'Crear tenant y administrador' }}
       </button>
     </form>
   } @else if (!isOperator()) {
     <p class="tenants__hint">
       Cambie el selector a Gradotech (default) para crear tenants. Los sitios de este tenant se administran en Sitios.
     </p>
+  }
+
+  @if (created(); as account) {
+    <article class="tenants__secret">
+      <p>Administrador creado en Keycloak. Entregue esta clave; no se vuelve a mostrar.</p>
+      <p><strong>{{ account.email }}</strong></p>
+      <p class="tenants__password">{{ account.temporaryPassword }}</p>
+    </article>
   }
 
   @if (error(); as message) {
@@ -77,7 +87,17 @@
         <p>{{ item.emailDomain ? '@' + item.emailDomain : 'Sin dominio' }}</p>
         <p>{{ adminLabel(item) }}</p>
         <p>{{ item._count?.sites ?? item.sites?.length ?? 0 }} sitios · {{ item._count?.agents ?? 0 }} agentes</p>
-        <button type="button" (click)="useTenant(item.slug)">Usar este tenant</button>
+        <div class="tenants__card-actions">
+          <button type="button" (click)="useTenant(item.slug)">Usar este tenant</button>
+          @if (isOperator() && item.slug !== 'default') {
+            <button type="button" class="eku-icon-btn" matTooltip="Editar" (click)="edit(item)" aria-label="Editar tenant">
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button type="button" class="eku-icon-btn eku-icon-btn--danger" matTooltip="Eliminar" (click)="remove(item)" aria-label="Eliminar tenant">
+              <mat-icon>delete</mat-icon>
+            </button>
+          }
+        </div>
       </article>
     }
   </div>

@@ -1,6 +1,8 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { MatIcon } from '@angular/material/icon';
+import { MatTooltip } from '@angular/material/tooltip';
 import { API_BASE_URL } from '../../core/api';
 import { TenantService, type TenantOption } from '../../core/tenant';
 import { EkuErrorStateComponent } from '../../shared/eku/error-state/eku-error-state';
@@ -13,7 +15,7 @@ import {
 
 @Component({
   selector: 'app-tenants-page',
-  imports: [ReactiveFormsModule, EkuPageHeaderComponent, EkuErrorStateComponent],
+  imports: [ReactiveFormsModule, MatIcon, MatTooltip, EkuPageHeaderComponent, EkuErrorStateComponent],
   templateUrl: './tenants-page.html',
   styleUrl: './tenants-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -26,6 +28,8 @@ export class TenantsPage {
   protected readonly items = this.tenants.tenants;
   protected readonly isOperator = this.tenants.isOperator;
   protected readonly formOpen = signal(false);
+  protected readonly editingSlug = signal<string | null>(null);
+  protected readonly created = signal<{ email: string; temporaryPassword: string } | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly saving = signal(false);
   protected readonly form = this.fb.nonNullable.group(
@@ -63,7 +67,72 @@ export class TenantsPage {
 
   protected toggleForm(): void {
     this.formOpen.update((open) => !open);
+    this.editingSlug.set(null);
     this.error.set(null);
+    this.created.set(null);
+    this.form.reset({
+      name: '',
+      slug: '',
+      emailDomain: '',
+      adminName: '',
+      adminEmail: '',
+      siteName: 'Sede principal',
+      siteSlug: 'local',
+    });
+    this.form.controls.slug.enable();
+    this.form.controls.adminName.enable();
+    this.form.controls.adminEmail.enable();
+    this.form.controls.siteName.enable();
+    this.form.controls.siteSlug.enable();
+  }
+
+  protected edit(item: TenantOption): void {
+    if (!this.isOperator() || item.slug === 'default') {
+      return;
+    }
+    this.formOpen.set(true);
+    this.editingSlug.set(item.slug);
+    this.error.set(null);
+    this.created.set(null);
+    this.form.reset({
+      name: item.name,
+      slug: item.slug,
+      emailDomain: item.emailDomain ?? '',
+      adminName: item.users?.[0]?.displayName ?? 'Administrador',
+      adminEmail: item.users?.[0]?.email ?? `admin@${item.emailDomain || 'cliente.com'}`,
+      siteName: item.sites?.[0]?.name ?? 'Sede principal',
+      siteSlug: item.sites?.[0]?.slug ?? 'local',
+    });
+    this.form.controls.slug.disable();
+    this.form.controls.adminName.disable();
+    this.form.controls.adminEmail.disable();
+    this.form.controls.siteName.disable();
+    this.form.controls.siteSlug.disable();
+  }
+
+  protected remove(item: TenantOption): void {
+    if (!this.isOperator() || item.slug === 'default') {
+      this.error.set('El tenant default no se puede eliminar.');
+      return;
+    }
+    if (!window.confirm(`¿Eliminar el tenant ${item.name}? Se borrarán sitios, agentes y usuarios.`)) {
+      return;
+    }
+    this.http.delete(`${API_BASE_URL}/v1/tenants/${item.slug}?as=default`).subscribe({
+      next: () => {
+        if (this.editingSlug() === item.slug) {
+          this.toggleForm();
+          this.formOpen.set(false);
+        }
+        if (this.tenants.slug() === item.slug) {
+          this.tenants.select('default');
+        }
+        this.tenants.load();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.error.set(err.error?.message ?? 'No se pudo eliminar el tenant.');
+      },
+    });
   }
 
   protected submit(): void {
@@ -78,36 +147,55 @@ export class TenantsPage {
     this.saving.set(true);
     this.error.set(null);
     const value = this.form.getRawValue();
-    this.http
-      .post<TenantOption>(`${API_BASE_URL}/v1/tenants?as=default`, {
-        name: value.name,
-        slug: value.slug || undefined,
-        emailDomain: value.emailDomain,
-        adminName: value.adminName,
-        adminEmail: value.adminEmail,
-        siteName: value.siteName,
-        siteSlug: value.siteSlug || undefined,
-      })
-      .subscribe({
-        next: () => {
-          this.saving.set(false);
-          this.form.reset({
-            name: '',
-            slug: '',
-            emailDomain: '',
-            adminName: '',
-            adminEmail: '',
-            siteName: 'Sede principal',
-            siteSlug: 'local',
-          });
-          this.formOpen.set(false);
-          this.tenants.load();
-        },
-        error: (err: { error?: { message?: string } }) => {
-          this.saving.set(false);
-          this.error.set(err.error?.message ?? 'No se pudo crear el tenant.');
-        },
-      });
+    const editingSlug = this.editingSlug();
+    const request = editingSlug
+      ? this.http.patch<TenantOption>(`${API_BASE_URL}/v1/tenants/${editingSlug}?as=default`, {
+          name: value.name,
+          emailDomain: value.emailDomain,
+        })
+      : this.http.post<TenantOption>(`${API_BASE_URL}/v1/tenants?as=default`, {
+          name: value.name,
+          slug: value.slug || undefined,
+          emailDomain: value.emailDomain,
+          adminName: value.adminName,
+          adminEmail: value.adminEmail,
+          siteName: value.siteName,
+          siteSlug: value.siteSlug || undefined,
+        });
+    request.subscribe({
+      next: (tenant) => {
+        this.saving.set(false);
+        this.form.controls.slug.enable();
+        this.form.controls.adminName.enable();
+        this.form.controls.adminEmail.enable();
+        this.form.controls.siteName.enable();
+        this.form.controls.siteSlug.enable();
+        this.form.reset({
+          name: '',
+          slug: '',
+          emailDomain: '',
+          adminName: '',
+          adminEmail: '',
+          siteName: 'Sede principal',
+          siteSlug: 'local',
+        });
+        this.formOpen.set(false);
+        this.editingSlug.set(null);
+        this.created.set(
+          !editingSlug && tenant.temporaryPassword
+            ? {
+                email: tenant.users?.[0]?.email ?? value.adminEmail,
+                temporaryPassword: tenant.temporaryPassword,
+              }
+            : null,
+        );
+        this.tenants.load();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.saving.set(false);
+        this.error.set(err.error?.message ?? (editingSlug ? 'No se pudo guardar el tenant.' : 'No se pudo crear el tenant.'));
+      },
+    });
   }
 
   protected useTenant(slug: string): void {

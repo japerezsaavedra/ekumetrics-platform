@@ -1,0 +1,65 @@
+<section class="login">
+  <aside class="login__brand">
+    <img class="login__logo" src="ekumetrics_logotipo_purple.svg" alt="Ekumetrics" />
+  </aside>
+
+  <div class="login__panel">
+    <button
+      type="button"
+      class="login__theme"
+      (click)="toggleTheme()"
+      [attr.aria-label]="isDark() ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'"
+    >
+      <mat-icon>{{ isDark() ? 'light_mode' : 'dark_mode' }}</mat-icon>
+    </button>
+
+    <article class="login__card">
+      <p class="login__eyebrow">Ekumetrics Platform</p>
+      @if (mustChange()) {
+        <h2>Actualice su contraseña</h2>
+        <p>Por seguridad, debe definir una contraseña personal antes de continuar.</p>
+      } @else {
+        <h2>Iniciar sesión</h2>
+        <p>Ingrese su correo corporativo y contraseña para acceder a la plataforma.</p>
+      }
+      @if (error(); as message) {
+        <eku-error-state [message]="message" />
+      }
+      @if (mustChange()) {
+        <form class="eku-form eku-form--stack" [formGroup]="changeForm" (ngSubmit)="savePassword()">
+          <label class="eku-field">
+            <span>Nueva contraseña</span>
+            <input type="password" formControlName="newPassword" autocomplete="new-password" />
+            <small>{{ changeHint('newPassword') }}</small>
+          </label>
+          <label class="eku-field">
+            <span>Confirmar contraseña</span>
+            <input type="password" formControlName="confirmPassword" autocomplete="new-password" />
+            <small>{{ changeHint('confirmPassword') }}</small>
+          </label>
+          <button type="submit" [disabled]="submitting()">
+            <mat-icon aria-hidden="true">lock</mat-icon>
+            {{ submitting() ? 'Guardando…' : 'Actualizar contraseña' }}
+          </button>
+        </form>
+      } @else {
+        <form class="eku-form eku-form--stack" [formGroup]="form" (ngSubmit)="enter()">
+          <label class="eku-field">
+            <span>Correo electrónico</span>
+            <input type="email" formControlName="email" autocomplete="username" />
+            <small>{{ fieldHint('email') }}</small>
+          </label>
+          <label class="eku-field">
+            <span>Contraseña</span>
+            <input type="password" formControlName="password" autocomplete="current-password" />
+            <small>{{ fieldHint('password') }}</small>
+          </label>
+          <button type="submit" [disabled]="submitting()">
+            <mat-icon aria-hidden="true">login</mat-icon>
+            {{ submitting() ? 'Ingresando…' : 'Iniciar sesión' }}
+          </button>
+        </form>
+      }
+    </article>
+  </div>
+</section>

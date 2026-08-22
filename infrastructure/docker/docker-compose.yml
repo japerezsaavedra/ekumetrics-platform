@@ -97,12 +97,17 @@ services:
     image: quay.io/keycloak/keycloak:26.3
     container_name: ekumetrics-keycloak
     profiles: ["iam"]
-    command: ["start-dev"]
+    command: ["start-dev", "--import-realm"]
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ekumetrics
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME: localhost
     ports:
       - "8080:8080"
+    volumes:
+      - ./keycloak/ekumetrics-realm.json:/opt/keycloak/data/import/ekumetrics-realm.json:ro
 
   holmes:
     image: us-central1-docker.pkg.dev/genuine-flight-317411/devel/holmes

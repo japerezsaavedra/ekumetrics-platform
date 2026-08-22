@@ -1,11 +1,13 @@
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatIcon } from '@angular/material/icon';
 import { MatTab, MatTabGroup } from '@angular/material/tabs';
 import { MatTooltip } from '@angular/material/tooltip';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { API_BASE_URL } from '../../core/api';
+import { AuthService } from '../../core/auth';
+import { TenantService } from '../../core/tenant';
 import { EkuEmptyStateComponent } from '../../shared/eku/empty-state/eku-empty-state';
 import { EkuErrorStateComponent } from '../../shared/eku/error-state/eku-error-state';
 import { EkuLoadingSkeletonComponent } from '../../shared/eku/loading-skeleton/eku-loading-skeleton';
@@ -47,8 +49,15 @@ export class HolmesPage {
   private readonly http = inject(HttpClient);
   private readonly fb = inject(FormBuilder);
   private readonly store = inject(ConversationStore);
+  private readonly auth = inject(AuthService);
+  private readonly tenants = inject(TenantService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  protected readonly scopeHint = computed(() => {
+    const email = this.auth.email();
+    const tenant = this.tenants.current()?.name || this.tenants.slug();
+    return email && tenant ? `${email} · ${tenant}` : '';
+  });
 
   protected readonly examples = EXAMPLE_QUESTIONS;
   protected readonly conversations = this.store.conversations;
@@ -67,10 +76,9 @@ export class HolmesPage {
   });
 
   constructor() {
-    const current = this.store.active();
-    if (current) {
-      this.messages.set(current.messages);
-    }
+    effect(() => {
+      this.messages.set(this.store.active()?.messages ?? []);
+    });
     this.http.get<AiStatus>(`${API_BASE_URL}/v1/ai/status`).subscribe({
       next: (value) => this.status.set(value),
       error: () => this.error.set('No se pudo conectar con la API.'),

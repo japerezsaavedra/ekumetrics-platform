@@ -1,4 +1,8 @@
 import { Body, Controller, Get, Headers, Post, Put, Query } from '@nestjs/common';
+import { actingTenant } from '../auth/auth.types';
+import { CurrentUser } from '../auth/current-user';
+import type { AuthUser } from '../auth/auth.types';
+import { Public } from '../auth/public';
 import { AiService } from './ai.service';
 
 type AskBody = {
@@ -13,6 +17,7 @@ type SettingsBody = {
   model?: string;
   apiKey?: string;
   baseUrl?: string;
+  systemPrompt?: string;
 };
 
 @Controller('v1/ai')
@@ -35,15 +40,29 @@ export class AiController {
   }
 
   @Get('snapshot')
-  snapshot(@Query('agent_id') agentId?: string) {
-    return this.ai.snapshot(agentId);
+  snapshot(
+    @CurrentUser() user: AuthUser,
+    @Query('agent_id') agentId?: string,
+    @Headers('x-eku-tenant') headerSlug?: string,
+  ) {
+    return this.ai.snapshot(agentId, actingTenant(user, headerSlug));
   }
 
   @Post('ask')
-  ask(@Body() body: AskBody) {
-    return this.ai.ask(body.question ?? '', body.service ?? body.provider, body.model);
+  ask(
+    @CurrentUser() user: AuthUser,
+    @Body() body: AskBody,
+    @Headers('x-eku-tenant') headerSlug?: string,
+  ) {
+    return this.ai.ask(
+      body.question ?? '',
+      body.service ?? body.provider,
+      body.model,
+      actingTenant(user, headerSlug),
+    );
   }
 
+  @Public()
   @Post('upstream/chat/completions')
   upstream(
     @Body() body: Record<string, unknown>,

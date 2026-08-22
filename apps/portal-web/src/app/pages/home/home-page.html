@@ -43,6 +43,7 @@
             }
           </select>
         </label>
+        <app-home-time-help />
         <button type="button" class="home__grafana" (click)="reload()">Actualizar</button>
         <button
           type="button"
@@ -63,7 +64,7 @@
   } @else if (data(); as board) {
     @if (section() === 'hosts') {
       @if (hosts().length === 0) {
-        <eku-empty-state message="No hay un host enviando metricas." />
+        <eku-empty-state message="No hay un host enviando métricas." />
       } @else {
         <div class="home__inventory">
           @for (item of hosts(); track item.id) {
@@ -98,7 +99,7 @@
       @if (networkDevices().length === 0) {
         <eku-empty-state
           title="Equipos de red"
-          message="Declare dispositivos en snmp.devices del agente 1.3. Switches, firewalls, APs, UPS o impresoras. Las NICs del servidor siguen en la tab Red de cada host."
+          message="Declare dispositivos en snmp.devices del YAML del agente. Switches, firewalls, APs, UPS o impresoras. Las NICs del servidor siguen en la tab Red de cada host."
         />
       } @else {
         <div class="home__inventory">
@@ -109,7 +110,7 @@
                   <mat-icon aria-hidden="true">lan</mat-icon>
                   {{ item.name }}
                 </span>
-                <span class="home__chip">{{ item.up ? 'Activo' : 'Sin senal' }}</span>
+                <span class="home__chip">{{ item.up ? 'Activo' : 'Sin señal' }}</span>
               </header>
               <div class="home__tile-metrics">
                 <span>
@@ -135,21 +136,34 @@
               <header>
                 <span class="home__util-title">
                   <mat-icon aria-hidden="true">memory</mat-icon>
-                  {{ hostLabel(item) }}
+                  {{ item.id }}
                 </span>
-                <span class="home__chip">Agente</span>
+                <span
+                  class="home__chip"
+                  [class.is-ok]="item.online === true"
+                  [class.is-crit]="item.online === false"
+                >
+                  {{ item.online === false ? 'Silencio' : item.online ? 'En línea' : 'Inscrito' }}
+                </span>
               </header>
-              <div class="home__tile-metrics">
+              <div class="home__tile-metrics home__tile-metrics--four">
                 <span>
-                  <b>{{ formatPercent(item.cpuUsed ?? null) }}</b>
-                  CPU
+                  <b>{{ modeLabel(item.mode) }}</b>
+                  tipo
+                </span>
+                <span>
+                  <b>{{ item.siteId || 'sin sitio' }}</b>
+                  sitio
+                </span>
+                <span>
+                  <b>{{ item.version || 'sin datos' }}</b>
+                  versión
                 </span>
                 <span>
                   <b>{{ formatUptime(item.agentUptimeSeconds ?? null) }}</b>
                   uptime
                 </span>
               </div>
-              <p class="home__muted">{{ item.id }}</p>
             </a>
           }
         </div>
@@ -158,7 +172,7 @@
       @if (databases().length === 0) {
         <eku-empty-state
           title="Bases de datos"
-          message="Active databases en el YAML del agente 1.3 (PostgreSQL, MySQL, Redis o MongoDB) para ver los motores aqui."
+          message="Active databases en el YAML del agente (PostgreSQL, MySQL, Redis o MongoDB) para ver los motores aquí."
         />
       } @else {
         <div class="home__inventory">
@@ -169,7 +183,7 @@
                   <mat-icon aria-hidden="true">storage</mat-icon>
                   {{ item.name }}
                 </span>
-                <span class="home__chip">{{ item.up ? 'Activa' : 'Sin senal' }}</span>
+                <span class="home__chip">{{ item.up ? 'Activa' : 'Sin señal' }}</span>
               </header>
               <div class="home__tile-metrics">
                 <span>
@@ -189,7 +203,7 @@
       @if (queues().length === 0) {
         <eku-empty-state
           title="Colas"
-          message="Active queues en el YAML del agente 1.3 (Kafka, RabbitMQ o NATS) para ver los brokers aqui."
+          message="Active queues en el YAML del agente (Kafka, RabbitMQ o NATS) para ver los brokers aquí."
         />
       } @else {
         <div class="home__inventory">
@@ -200,7 +214,7 @@
                   <mat-icon aria-hidden="true">account_tree</mat-icon>
                   {{ item.name }}
                 </span>
-                <span class="home__chip">{{ item.up ? 'Activa' : 'Sin senal' }}</span>
+                <span class="home__chip">{{ item.up ? 'Activa' : 'Sin señal' }}</span>
               </header>
               <div class="home__tile-metrics">
                 <span>
@@ -220,7 +234,7 @@
       @if (icewarp().length === 0) {
         <eku-empty-state
           title="IceWarp"
-          message="Active icewarp en el YAML del agente 1.3 (SNMP 1161 y probes) para ver el correo aqui."
+          message="Active icewarp en el YAML del agente (SNMP 1161 y probes) para ver el correo aquí."
         />
       } @else {
         <div class="home__inventory">
@@ -231,7 +245,7 @@
                   <mat-icon aria-hidden="true">mail</mat-icon>
                   {{ item.name }}
                 </span>
-                <span class="home__chip">{{ item.up ? 'Activo' : 'Sin senal' }}</span>
+                <span class="home__chip">{{ item.up ? 'Activo' : 'Sin señal' }}</span>
               </header>
               <div class="home__tile-metrics">
                 <span>
@@ -251,7 +265,7 @@
       @if (sap().length === 0) {
         <eku-empty-state
           title="SAP"
-          message="Active sap.channel en el YAML del agente para ver sistemas y sesiones aqui."
+          message="El canal SAP va en un agente tipo Sensor (mode: sensor), no en el YAML de sede. Active sap.channel para ver sistemas y sesiones aquí."
         />
       } @else {
         <div class="home__inventory">
@@ -262,7 +276,7 @@
                   <mat-icon aria-hidden="true">lan</mat-icon>
                   {{ item.name }}
                 </span>
-                <span class="home__chip">{{ item.up ? 'Activo' : 'Sin senal' }}</span>
+                <span class="home__chip">{{ item.up ? 'Activo' : 'Sin señal' }}</span>
               </header>
               <div class="home__tile-metrics">
                 <span>
@@ -305,12 +319,12 @@
                 <mat-icon aria-hidden="true">memory</mat-icon>
                 Estado
               </span>
-              <span class="home__chip">{{ board.agent.online ? 'En linea' : 'Silencio' }}</span>
+              <span class="home__chip">{{ board.agent.online ? 'En línea' : 'Silencio' }}</span>
             </header>
             <div class="home__tile-metrics">
               <span>
                 <b>{{ board.agent.version ?? 'sin datos' }}</b>
-                version
+                versión
               </span>
             </div>
           </article>
@@ -329,7 +343,7 @@
                     ? 'Sin datos'
                     : board.agent.licenseValid
                       ? 'Vigente'
-                      : 'No valida'
+                      : 'No válida'
                 }}
               </span>
             </header>
@@ -349,7 +363,7 @@
             <header>
               <span class="home__util-title">
                 <mat-icon aria-hidden="true">schedule</mat-icon>
-                Senal
+                Señal
               </span>
               <span class="home__chip">
                 {{
@@ -358,7 +372,7 @@
                     : board.agent.lastSampleSeconds < 90
                       ? 'Reciente'
                       : board.agent.lastSampleSeconds < 180
-                        ? 'Tardia'
+                        ? 'Tardía'
                         : 'Silencio'
                 }}
               </span>
@@ -366,7 +380,7 @@
             <div class="home__tile-metrics">
               <span>
                 <b>{{ formatAgo(board.agent.lastSampleSeconds) }}</b>
-                ultima muestra
+                última muestra
               </span>
             </div>
           </article>
@@ -381,11 +395,11 @@
             <div class="home__tile-metrics">
               <span>
                 <b>{{ formatNumber(board.agent.assetsKnown) }}</b>
-                known
+                conocidos
               </span>
               <span>
                 <b>{{ formatNumber(board.agent.assetsSuggested) }}</b>
-                suggested
+                sugeridos
               </span>
             </div>
           </article>
@@ -393,28 +407,31 @@
         <article class="home__panel">
           <h3>Identidad</h3>
           @if (identity().length === 0) {
-            <p class="home__muted">Sin etiquetas de identidad.</p>
+            <p class="home__muted">Sin identidad reportada por el agente.</p>
           } @else {
             <div class="home__facts">
-              @for (pair of identity(); track pair[0]) {
+              @for (item of identity(); track item.key) {
                 <span>
-                  <b>{{ pair[1] }}</b>
-                  {{ pair[0] }}
+                  <b>{{ item.value }}</b>
+                  {{ item.label }}
+                  @if (item.hint) {
+                    <small>{{ item.hint }}</small>
+                  }
                 </span>
               }
             </div>
           }
         </article>
         <article class="home__panel">
-          <h3>Modulos</h3>
+          <h3>Módulos</h3>
           @if (agentModules().length === 0) {
-            <p class="home__muted">Sin ekms_agent_module_enabled.</p>
+            <p class="home__muted">Sin módulos reportados por el agente.</p>
           } @else {
             <ul class="home__modules home__modules--grid">
               @for (item of agentModules(); track item.module) {
                 <li [class.is-on]="item.enabled">
-                  <span>{{ item.module }}</span>
-                  <strong>{{ item.enabled ? 'On' : 'Off' }}</strong>
+                  <span>{{ item.label }}</span>
+                  <strong>{{ item.enabled ? 'Activo' : 'Inactivo' }}</strong>
                 </li>
               }
             </ul>
@@ -422,7 +439,7 @@
         </article>
       </div>
     } @else if (section() === 'host' && !board.host.id) {
-      <eku-empty-state message="No hay un host enviando metricas." />
+      <eku-empty-state message="No hay un host enviando métricas." />
     } @else if (section() === 'host') {
       <div class="home__hostbar">
         <p class="home__crumb">
@@ -596,21 +613,21 @@
             CPU en uso por estado
             <app-home-chart-ask [hint]="hints.cpu" [question]="askText('CPU en uso por estado')" />
           </h3>
-          <eku-chart [option]="cpuChart()" />
+          <eku-chart [option]="cpuChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
         </article>
         <article class="home__chart">
           <h3>
             Carga
             <app-home-chart-ask [hint]="hints.load" [question]="askText('Carga')" />
           </h3>
-          <eku-chart [option]="loadChart()" />
+          <eku-chart [option]="loadChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
         </article>
         <article class="home__chart">
           <h3>
             Memoria por estado
             <app-home-chart-ask [hint]="hints.memory" [question]="askText('Memoria por estado')" />
           </h3>
-          <eku-chart [option]="memoryChart()" />
+          <eku-chart [option]="memoryChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
         </article>
           </div>
         </mat-tab>
@@ -761,14 +778,14 @@
             Disco I/O
             <app-home-chart-ask [hint]="hints.diskIo" [question]="askText('Disco I/O')" />
           </h3>
-          <eku-chart [option]="diskIoChart()" />
+          <eku-chart [option]="diskIoChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
         </article>
         <article class="home__chart">
           <h3>
             Disco operaciones / s
             <app-home-chart-ask [hint]="hints.diskOps" [question]="askText('Disco operaciones / s')" />
           </h3>
-          <eku-chart [option]="diskOpsChart()" />
+          <eku-chart [option]="diskOpsChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
         </article>
           </div>
         </mat-tab>
@@ -812,35 +829,35 @@
             Red I/O
             <app-home-chart-ask [hint]="hints.network" [question]="askText('Red I/O')" />
           </h3>
-          <eku-chart [option]="networkChart()" />
+          <eku-chart [option]="networkChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
         </article>
         <article class="home__chart">
           <h3>
             Paquetes de red
             <app-home-chart-ask [hint]="hints.packets" [question]="askText('Paquetes de red')" />
           </h3>
-          <eku-chart [option]="packetsChart()" />
+          <eku-chart [option]="packetsChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
         </article>
         <article class="home__chart">
           <h3>
             Red errores y descartes
             <app-home-chart-ask [hint]="hints.netFault" [question]="askText('Red errores y descartes')" />
           </h3>
-          <eku-chart [option]="netFaultChart()" />
+          <eku-chart [option]="netFaultChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
         </article>
         <article class="home__chart">
           <h3>
             Conexiones TCP
             <app-home-chart-ask [hint]="hints.tcpConn" [question]="askText('Conexiones TCP')" />
           </h3>
-          <eku-chart [option]="tcpConnChart()" />
+          <eku-chart [option]="tcpConnChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
         </article>
         <article class="home__chart">
           <h3>
             Conexiones UDP y otras
             <app-home-chart-ask [hint]="hints.otherConn" [question]="askText('Conexiones UDP y otras')" />
           </h3>
-          <eku-chart [option]="otherConnChart()" />
+          <eku-chart [option]="otherConnChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
         </article>
           </div>
         </mat-tab>
@@ -852,7 +869,7 @@
             Volumen de logs
             <app-home-chart-ask [hint]="hints.volume" [question]="askText('Volumen de logs')" />
           </h3>
-          <eku-chart [option]="volumeChart()" [pickTime]="true" (timePicked)="pickLogVolume($event)" />
+          <eku-chart [option]="volumeChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" [pickTime]="true" (timePicked)="pickLogVolume($event)" />
         </article>
 
         <article class="home__panel home__panel--disks home__span">

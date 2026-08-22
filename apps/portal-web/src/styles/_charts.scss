@@ -22,3 +22,9 @@
   white-space: normal;
   line-height: 1.4;
 }
+
+// Panel de ayuda con contenido propio: Material limita el ancho del menu a 280px.
+.eku-hint-panel.mat-mdc-menu-panel {
+  max-width: min(32rem, calc(100vw - 2rem));
+  background: var(--eku-surface-elevated);
+}

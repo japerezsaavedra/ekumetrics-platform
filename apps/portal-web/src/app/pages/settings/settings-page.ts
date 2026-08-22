@@ -1,11 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatButton } from '@angular/material/button';
-import { MatCard, MatCardContent, MatCardHeader, MatCardTitle } from '@angular/material/card';
-import { MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
-import { MatInput } from '@angular/material/input';
-import { MatOption, MatSelect } from '@angular/material/select';
 import { API_BASE_URL } from '../../core/api';
 import { EkuErrorStateComponent } from '../../shared/eku/error-state/eku-error-state';
 import { EkuPageHeaderComponent } from '../../shared/eku/page-header/eku-page-header';
@@ -26,27 +21,13 @@ type AiSettings = {
   model: string;
   baseUrl: string;
   hasApiKey: boolean;
+  systemPrompt?: string;
   services: AiServiceOption[];
 };
 
 @Component({
   selector: 'app-settings-page',
-  imports: [
-    ReactiveFormsModule,
-    MatCard,
-    MatCardHeader,
-    MatCardTitle,
-    MatCardContent,
-    MatFormField,
-    MatLabel,
-    MatInput,
-    MatHint,
-    MatSelect,
-    MatOption,
-    MatButton,
-    EkuPageHeaderComponent,
-    EkuErrorStateComponent,
-  ],
+  imports: [ReactiveFormsModule, EkuPageHeaderComponent, EkuErrorStateComponent],
   templateUrl: './settings-page.html',
   styleUrl: './settings-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -61,12 +42,14 @@ export class SettingsPage {
   protected readonly loading = signal(false);
   private readonly savedService = signal('ollama');
   private readonly savedHasKey = signal(false);
+  private readonly savedModel = signal('');
 
   protected readonly form = this.fb.nonNullable.group({
     service: ['ollama', [Validators.required]],
     model: ['qwen2.5:14b', [Validators.required]],
     apiKey: [''],
     baseUrl: [''],
+    systemPrompt: [''],
   });
 
   constructor() {
@@ -89,6 +72,22 @@ export class SettingsPage {
     return this.savedHasKey() && this.form.controls.service.value === this.savedService();
   }
 
+  protected catalogModels(): string[] {
+    return this.selectedService()?.models ?? [];
+  }
+
+  protected savedModelOutsideCatalog(): string | null {
+    const model = this.savedModel();
+    const models = this.catalogModels();
+    if (!model || !models.length || models.includes(model)) {
+      return null;
+    }
+    if (this.form.controls.service.value !== this.savedService()) {
+      return null;
+    }
+    return model;
+  }
+
   protected submit(): void {
     this.syncValidators();
     if (this.form.invalid) {
@@ -98,13 +97,14 @@ export class SettingsPage {
     this.loading.set(true);
     this.error.set(null);
     this.saved.set(false);
-    const { service, model, apiKey, baseUrl } = this.form.getRawValue();
+    const { service, model, apiKey, baseUrl, systemPrompt } = this.form.getRawValue();
     this.http
       .put<AiSettings>(`${API_BASE_URL}/v1/ai/settings`, {
         service,
         model,
         apiKey: apiKey.trim() || undefined,
         baseUrl: baseUrl.trim() || undefined,
+        systemPrompt,
       })
       .subscribe({
         next: (value) => {
@@ -132,12 +132,14 @@ export class SettingsPage {
     this.catalog.set(value.services ?? this.catalog());
     this.savedService.set(value.service);
     this.savedHasKey.set(value.hasApiKey);
+    this.savedModel.set(value.model);
     this.form.patchValue(
       {
         service: value.service,
         model: value.model,
         baseUrl: value.baseUrl ?? '',
         apiKey: '',
+        systemPrompt: value.systemPrompt ?? '',
       },
       { emitEvent: false },
     );
@@ -146,8 +148,8 @@ export class SettingsPage {
 
   private applyServiceDefaults(serviceId: string): void {
     const service = this.catalog().find((item) => item.id === serviceId);
-    if (service?.defaultModel) {
-      this.form.controls.model.setValue(service.defaultModel);
+    if (service?.models.length && !service.models.includes(this.form.controls.model.value)) {
+      this.form.controls.model.setValue(service.defaultModel || service.models[0]);
     }
     if (service?.id !== 'openai_compat') {
       this.form.controls.baseUrl.setValue('');

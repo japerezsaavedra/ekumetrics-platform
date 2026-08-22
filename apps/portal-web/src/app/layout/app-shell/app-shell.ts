@@ -9,6 +9,7 @@ import { MatToolbar } from '@angular/material/toolbar';
 import { MatTooltip } from '@angular/material/tooltip';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
+import { AuthService } from '../../core/auth';
 import { KioskService } from '../../core/kiosk';
 import { TenantService } from '../../core/tenant';
 import { ThemeService } from '../../core/theme';
@@ -40,8 +41,12 @@ export class AppShell {
   private readonly theme = inject(ThemeService);
   private readonly kiosk = inject(KioskService);
   private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
   private readonly tenants = inject(TenantService);
   protected readonly tenantOptions = this.tenants.tenants;
+  protected readonly isOperator = this.tenants.isOperator;
+  protected readonly userEmail = this.auth.email;
+  protected readonly userName = this.auth.name;
   protected readonly tenantControl = new FormControl(this.tenants.slug(), { nonNullable: true });
   protected readonly asideOpen = signal(true);
   protected readonly kioskOn = this.kiosk.active;
@@ -72,7 +77,11 @@ export class AppShell {
   }
 
   protected logout(): void {
-    // IAM (Keycloak) se conecta aqui en una fase posterior.
+    this.auth.logout();
+  }
+
+  protected isLogin(): boolean {
+    return this.currentUrl().startsWith('/login');
   }
 
   protected currentUrl(): string {

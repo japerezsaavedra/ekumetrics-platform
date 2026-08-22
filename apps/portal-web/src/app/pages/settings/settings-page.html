@@ -1,74 +1,81 @@
 <section class="settings">
   <eku-page-header
     title="Modelos de IA"
-    subtitle="Servicio y modelo que usara EkuAssistant AI. La clave no se vuelve a mostrar."
+    subtitle="Elija proveedor y modelo. EkuAssistant ya lleva el prompt de producto; aquí solo se suma un complemento suyo."
   />
 
-  <mat-card>
-    <mat-card-header>
-      <mat-card-title>Modelo de IA</mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      <form class="settings__form" [formGroup]="form" (ngSubmit)="submit()">
-        <mat-form-field appearance="outline">
-          <mat-label>Servicio</mat-label>
-          <mat-select formControlName="service">
-            @for (item of catalog(); track item.id) {
-              <mat-option [value]="item.id">{{ item.label }}</mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
+  <form class="eku-form settings__form" [formGroup]="form" (ngSubmit)="submit()">
+    <label class="eku-field">
+      <span>Servicio</span>
+      <select formControlName="service">
+        @for (item of catalog(); track item.id) {
+          <option [value]="item.id">{{ item.label }}</option>
+        }
+      </select>
+      <small></small>
+    </label>
 
-        <mat-form-field appearance="outline">
-          <mat-label>Modelo</mat-label>
-          <input matInput formControlName="model" list="settings-models" />
-          <datalist id="settings-models">
-            @for (item of selectedService()?.models ?? []; track item) {
-              <option [value]="item"></option>
-            }
-          </datalist>
-          @if (fieldInvalid('model')) {
-            <mat-hint>Indique el modelo a utilizar.</mat-hint>
+    <label class="eku-field">
+      <span>Modelo</span>
+      @if (catalogModels().length) {
+        <select formControlName="model">
+          @if (savedModelOutsideCatalog(); as extra) {
+            <option [value]="extra">{{ extra }} (guardado)</option>
           }
-        </mat-form-field>
-
-        @if (selectedService()?.needsKey) {
-          <mat-form-field appearance="outline">
-            <mat-label>Clave API</mat-label>
-            <input
-              matInput
-              type="password"
-              formControlName="apiKey"
-              autocomplete="off"
-              [placeholder]="hasSavedKey() ? 'Dejar en blanco para conservar la clave' : 'sk-...'"
-            />
-          </mat-form-field>
-        }
-
-        @if (selectedService()?.needsBaseUrl) {
-          <mat-form-field appearance="outline">
-            <mat-label>URL base</mat-label>
-            <input matInput type="url" formControlName="baseUrl" />
-          </mat-form-field>
-        }
-
-        @if (selectedService(); as current) {
-          <p class="settings__hint">{{ current.hint }}</p>
-        }
-
-        <button mat-flat-button type="submit" [disabled]="loading()">
-          @if (loading()) {
-            Guardando…
-          } @else {
-            Guardar
+          @for (item of catalogModels(); track item) {
+            <option [value]="item">{{ item }}</option>
           }
-        </button>
-      </form>
-    </mat-card-content>
-  </mat-card>
+        </select>
+      } @else {
+        <input formControlName="model" placeholder="nombre-del-modelo" />
+      }
+      <small>{{ fieldInvalid('model') ? 'Indique el modelo a utilizar.' : '' }}</small>
+    </label>
+
+    @if (selectedService()?.needsKey) {
+      <label class="eku-field" [class.settings__span]="!selectedService()?.needsBaseUrl">
+        <span>Clave API</span>
+        <input
+          type="password"
+          formControlName="apiKey"
+          autocomplete="off"
+          [placeholder]="hasSavedKey() ? 'Dejar en blanco para conservar la clave' : 'sk-...'"
+        />
+        <small>{{ fieldInvalid('apiKey') ? 'Indique la clave API.' : '' }}</small>
+      </label>
+    }
+
+    @if (selectedService()?.needsBaseUrl) {
+      <label class="eku-field">
+        <span>URL base</span>
+        <input type="url" formControlName="baseUrl" placeholder="https://…" />
+        <small>{{ fieldInvalid('baseUrl') ? 'Indique la URL base.' : '' }}</small>
+      </label>
+    }
+
+    @if (selectedService(); as current) {
+      <p class="settings__hint">{{ current.hint }}</p>
+    }
+
+    <label class="eku-field settings__prompt">
+      <span>Complemento (opcional)</span>
+      <textarea
+        formControlName="systemPrompt"
+        rows="4"
+        placeholder="Ejemplo: priorice el sitio planta-norte y avise si un agente SAP queda en silencio."
+      ></textarea>
+      <small>
+        Se añade al prompt de Ekumetrics. No sustituye las reglas de producto.
+      </small>
+    </label>
+
+    <button type="submit" [disabled]="loading()">
+      {{ loading() ? 'Guardando…' : 'Guardar' }}
+    </button>
+  </form>
 
   @if (saved()) {
-    <p class="settings__ok">Configuracion guardada. EkuAssistant AI usara este modelo.</p>
+    <p class="settings__ok">Configuración guardada. EkuAssistant AI usará este modelo.</p>
   }
   @if (error(); as message) {
     <eku-error-state [message]="message" />

@@ -16,6 +16,18 @@
   background: transparent;
 }
 
+.eku-form--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.eku-form--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.eku-form--4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .eku-field {
   display: grid;
   grid-template-rows: 1.25rem 2.5rem 1.25rem;
@@ -32,15 +44,31 @@
 
 .eku-field input,
 .eku-field select,
-.eku-field button {
+.eku-field button,
+.eku-field textarea {
+  box-sizing: border-box;
   width: 100%;
   min-height: 2.5rem;
-  height: 2.5rem;
-  padding: 0 0.75rem;
+  padding: 0 0.85rem;
   border: 1px solid var(--eku-border);
   background: var(--eku-surface);
   color: var(--eku-text-primary);
   font: inherit;
+}
+
+.eku-field input,
+.eku-field select,
+.eku-field button {
+  height: 2.5rem;
+}
+
+.eku-field select {
+  appearance: none;
+  padding-right: 2.35rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M4.2 6.2 8 10l3.8-3.8'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
 }
 
 .eku-field button {

@@ -7,6 +7,9 @@ export type DashboardHost = {
   id: string;
   siteId: string | null;
   tenantId: string | null;
+  mode: string | null;
+  version: string | null;
+  online: boolean | null;
   cpuUsed: number | null;
   memoryUsed: number | null;
   uptimeSeconds: number | null;
@@ -159,16 +162,16 @@ export class DashboardService {
       this.safeInstant(diskUsedQuery),
       this.safeInstant(diskFreeQuery),
       this.safeInstant(diskTotalQuery),
-      this.safeInstant(`system_cpu_load_average_1m${sel()}`),
-      this.safeInstant(`system_cpu_load_average_5m${sel()}`),
-      this.safeInstant(`system_cpu_load_average_15m${sel()}`),
+      this.safeInstant(`max(system_cpu_load_average_1m${sel()})`),
+      this.safeInstant(`max(system_cpu_load_average_5m${sel()})`),
+      this.safeInstant(`max(system_cpu_load_average_15m${sel()})`),
       this.safeInstant(`max(system_uptime${sel()})`),
       this.safeInstant(`max(system_uptime_seconds${sel()})`),
       this.safeRange(cpuQuery, window),
       this.safeRange(cpuStateQuery, window),
-      this.safeRange(`system_cpu_load_average_1m${sel()}`, window),
-      this.safeRange(`system_cpu_load_average_5m${sel()}`, window),
-      this.safeRange(`system_cpu_load_average_15m${sel()}`, window),
+      this.safeRange(`max(system_cpu_load_average_1m${sel()})`, window),
+      this.safeRange(`max(system_cpu_load_average_5m${sel()})`, window),
+      this.safeRange(`max(system_cpu_load_average_15m${sel()})`, window),
       this.safeRange(memStateQuery, window),
       this.safeRange(netQuery, window),
       this.safeRange(diskIoQuery, window),
@@ -305,6 +308,9 @@ export class DashboardService {
             id: agent.agentId,
             siteId: agent.siteId,
             tenantId: tenant.slug,
+            mode: agent.mode || null,
+            version: null,
+            online: null,
             cpuUsed: null,
             memoryUsed: null,
             uptimeSeconds: null,
@@ -322,6 +328,9 @@ export class DashboardService {
         id: row.metric.agent_id?.trim() ?? '',
         siteId: row.metric.site_id ?? row.metric.host_site ?? row.metric.site ?? null,
         tenantId: row.metric.tenant_id ?? tenantSlug ?? null,
+        mode: row.metric.mode ?? null,
+        version: null,
+        online: null,
         cpuUsed: null,
         memoryUsed: null,
         uptimeSeconds: null,
@@ -335,6 +344,9 @@ export class DashboardService {
           id: row.metric.agent_id?.trim() ?? '',
           siteId: row.metric.site_id ?? row.metric.site ?? null,
           tenantId: row.metric.tenant_id ?? tenantSlug ?? null,
+          mode: row.metric.mode ?? null,
+          version: row.metric.version ?? null,
+          online: null,
           cpuUsed: null,
           memoryUsed: null,
           uptimeSeconds: null,
@@ -358,26 +370,37 @@ export class DashboardService {
     if (hosts.length === 0) {
       return hosts;
     }
-    const [cpuRows, memRows, uptimeRows, agentUptimeRows, coreRows] = await Promise.all([
-      this.safeInstant(
-        '1 - sum by (agent_id) (rate(system_cpu_time_seconds_total{state="idle"}[1m])) / sum by (agent_id) (rate(system_cpu_time_seconds_total[1m]))',
-      ),
-      this.safeInstant(
-        'sum by (agent_id) (system_memory_usage_bytes{state="used"}) / sum by (agent_id) (system_memory_usage_bytes)',
-      ),
-      this.safeInstant(
-        'max by (agent_id) (system_uptime_seconds) or max by (agent_id) (system_uptime)',
-      ),
-      this.safeInstant('time() - max by (agent_id) (process_start_time_seconds)'),
-      this.safeInstant('max by (agent_id) (system_cpu_logical_count)'),
-    ]);
+    const [cpuRows, memRows, uptimeRows, agentUptimeRows, coreRows, identRows, infoRows, onlineRows] =
+      await Promise.all([
+        this.safeInstant(
+          '1 - sum by (agent_id) (rate(system_cpu_time_seconds_total{state="idle"}[1m])) / sum by (agent_id) (rate(system_cpu_time_seconds_total[1m]))',
+        ),
+        this.safeInstant(
+          'sum by (agent_id) (system_memory_usage_bytes{state="used"}) / sum by (agent_id) (system_memory_usage_bytes)',
+        ),
+        this.safeInstant(
+          'max by (agent_id) (system_uptime_seconds) or max by (agent_id) (system_uptime)',
+        ),
+        this.safeInstant('time() - max by (agent_id) (process_start_time_seconds)'),
+        this.safeInstant('max by (agent_id) (system_cpu_logical_count)'),
+        this.safeInstant('ekms_agent_identity'),
+        this.safeInstant('ekms_agent_info'),
+        this.safeInstant('max by (agent_id) (present_over_time(ekms_agent_identity[2m]))'),
+      ]);
     const cpu = this.valueByAgent(cpuRows);
     const mem = this.valueByAgent(memRows);
     const uptime = this.valueByAgent(uptimeRows);
     const agentUptime = this.valueByAgent(agentUptimeRows);
     const cores = this.valueByAgent(coreRows);
+    const modes = this.labelByAgent(identRows, 'mode');
+    const versions = this.labelByAgent(infoRows, 'version');
+    const versionsBySite = this.labelByKey(infoRows, 'site', 'version');
+    const online = this.valueByAgent(onlineRows);
     return hosts.map((host) => ({
       ...host,
+      mode: modes.get(host.id) ?? host.mode,
+      version: versions.get(host.id) ?? (host.siteId ? versionsBySite.get(host.siteId) : undefined) ?? host.version,
+      online: online.has(host.id) ? online.get(host.id)! >= 1 : host.online,
       cpuUsed: cpu.get(host.id) ?? null,
       memoryUsed: mem.get(host.id) ?? null,
       uptimeSeconds: uptime.get(host.id) ?? null,
@@ -621,6 +644,23 @@ export class DashboardService {
     return items;
   }
 
+  private labelByAgent(rows: InstantRow[], key: string): Map<string, string> {
+    return this.labelByKey(rows, 'agent_id', key);
+  }
+
+  private labelByKey(rows: InstantRow[], idKey: string, valueKey: string): Map<string, string> {
+    const values = new Map<string, string>();
+    for (const row of rows) {
+      const id = row.metric[idKey]?.trim();
+      const label = row.metric[valueKey]?.trim();
+      if (!id || !label) {
+        continue;
+      }
+      values.set(id, label);
+    }
+    return values;
+  }
+
   private valueByAgent(rows: InstantRow[]): Map<string, number> {
     const values = new Map<string, number>();
     for (const row of rows) {
@@ -767,6 +807,8 @@ export class DashboardService {
 
   private windowFor(rangeInput?: string): { seconds: number; step: number; rate: string } {
     const catalog: Record<string, number> = {
+      '1m': 60,
+      '5m': 300,
       '15m': 900,
       '1h': 3600,
       '3h': 10800,
@@ -778,10 +820,12 @@ export class DashboardService {
     const raw = (rangeInput ?? '').trim();
     const seconds = Math.min(
       604800,
-      Math.max(300, catalog[raw] ?? (Number(raw) || 900)),
+      Math.max(60, catalog[raw] ?? (Number(raw) || 900)),
     );
     let step = 10;
-    if (seconds > 86400) {
+    if (seconds <= 120) {
+      step = 5;
+    } else if (seconds > 86400) {
       step = 900;
     } else if (seconds > 43200) {
       step = 180;

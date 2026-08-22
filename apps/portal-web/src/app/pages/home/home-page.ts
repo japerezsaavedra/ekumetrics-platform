@@ -6,14 +6,15 @@ import { MatIcon } from '@angular/material/icon';
 import { MatTab, MatTabGroup } from '@angular/material/tabs';
 import { MatTooltip } from '@angular/material/tooltip';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
-import { filter, map } from 'rxjs';
-import { combineLatest, interval, of, startWith, switchMap } from 'rxjs';
+import { catchError, filter, map, startWith, switchMap, tap } from 'rxjs';
+import { combineLatest, EMPTY, of, timer } from 'rxjs';
 import { API_BASE_URL } from '../../core/api';
 import { KioskService } from '../../core/kiosk';
 import { TenantService } from '../../core/tenant';
 import { ThemeService } from '../../core/theme';
 import { EkuChartComponent } from '../../shared/eku/chart/eku-chart';
 import { HomeChartAskComponent } from './home-chart-ask';
+import { HomeTimeHelpComponent } from './home-time-help';
 import { EkuEmptyStateComponent } from '../../shared/eku/empty-state/eku-empty-state';
 import { EkuErrorStateComponent } from '../../shared/eku/error-state/eku-error-state';
 import { EkuLoadingSkeletonComponent } from '../../shared/eku/loading-skeleton/eku-loading-skeleton';
@@ -49,6 +50,7 @@ import {
   DASHBOARD_REFRESHES,
   persistTime,
   rangeLabel,
+  rangeSeconds,
   readRange,
   readRefresh,
   refreshMs,
@@ -73,6 +75,38 @@ const TITLE_BY_SECTION: Record<DashSection, string> = {
   sap: 'SAP',
 };
 
+const MODULE_LABELS: Record<string, string> = {
+  'metrics.host': 'Host',
+  'metrics.processes': 'Procesos',
+  'metrics.scrape': 'Scrape',
+  'metrics.snmp': 'SNMP',
+  'metrics.otlp': 'Métricas OTLP',
+  databases: 'Bases de datos',
+  queues: 'Colas',
+  icewarp: 'IceWarp',
+  logs: 'Logs',
+  traces: 'Trazas',
+  'ingest.syslog': 'Syslog',
+  'ingest.netflow': 'NetFlow',
+  'ingest.traps': 'Traps SNMP',
+  'discovery.passive': 'Discovery',
+  probes: 'Sondas',
+  sap: 'Canal SAP',
+};
+
+function moduleLabel(module: string): string {
+  return MODULE_LABELS[module] ?? module;
+}
+
+const MODE_LABELS: Record<string, string> = {
+  site: 'Servidor',
+  central: 'NOC',
+  sensor: 'Sensor',
+  endpoint: 'Endpoint',
+};
+
+type IdentityFact = { key: string; label: string; value: string; hint?: string };
+
 @Component({
   selector: 'app-home-page',
   imports: [
@@ -88,6 +122,7 @@ const TITLE_BY_SECTION: Record<DashSection, string> = {
     EkuLoadingSkeletonComponent,
     EkuChartComponent,
     HomeChartAskComponent,
+    HomeTimeHelpComponent,
   ],
   templateUrl: './home-page.html',
   styleUrl: './home-page.css',
@@ -203,6 +238,9 @@ export class HomePage {
       id: item.agentId,
       siteId: item.siteId,
       tenantId: item.tenantId,
+      mode: null,
+      version: null,
+      online: null,
       cpuUsed: null,
       memoryUsed: null,
       uptimeSeconds: null,
@@ -305,6 +343,13 @@ export class HomePage {
     return item.siteId ? `${item.siteId} · ${item.id}` : item.id;
   }
 
+  protected modeLabel(mode?: string | null): string {
+    if (!mode) {
+      return 'sin datos';
+    }
+    return MODE_LABELS[mode] ?? mode;
+  }
+
   protected nicKey(item: { hostId: string; device: string }): string {
     return `${item.hostId}|${item.device}`;
   }
@@ -369,20 +414,47 @@ export class HomePage {
     return this.processSortDir() === 'asc' ? 'ascending' : 'descending';
   }
 
-  protected readonly identity = computed(() => {
-    const ident = this.data()?.agent.identity ?? {};
-    const labels: Array<[string, string]> = [
-      ['tenant', ident['tenant_id'] ?? ''],
-      ['sitio', ident['site_id'] ?? this.data()?.host.siteId ?? ''],
-      ['modo', ident['mode'] ?? ''],
-      ['entorno', ident['environment'] ?? ''],
+  protected readonly identity = computed((): IdentityFact[] => {
+    const board = this.data();
+    const ident = board?.agent.identity ?? {};
+    const tenantSlug = ident['tenant_id'] ?? board?.host.tenantId ?? this.tenants.slug();
+    const siteSlug = ident['site_id'] ?? board?.host.siteId ?? '';
+    const agentId = ident['agent_id'] ?? board?.agentId ?? '';
+    const mode = ident['mode'] ?? '';
+    const environment = ident['environment'] ?? '';
+    const tenant =
+      this.tenants.tenants().find((item) => item.slug === tenantSlug) ?? this.tenants.current();
+    const site = tenant?.sites?.find((item) => item.slug === siteSlug);
+    const facts: IdentityFact[] = [
+      { key: 'agent', label: 'agente', value: agentId },
+      {
+        key: 'tenant',
+        label: 'tenant',
+        value: tenant?.name || tenantSlug,
+        hint: tenant?.name && tenant.slug !== tenant.name ? tenant.slug : undefined,
+      },
+      {
+        key: 'site',
+        label: 'sitio',
+        value: site?.name || siteSlug,
+        hint: site?.name && site.slug !== site.name ? site.slug : undefined,
+      },
+      {
+        key: 'mode',
+        label: 'tipo',
+        value: MODE_LABELS[mode] ?? mode,
+        hint: MODE_LABELS[mode] ? mode : undefined,
+      },
+      { key: 'env', label: 'entorno', value: environment },
     ];
-    return labels.filter(([, value]) => value.trim().length > 0);
+    return facts.filter((item) => item.value.trim().length > 0);
   });
 
   protected readonly agentModules = computed(() => {
     const items = this.data()?.agent.modules ?? [];
-    return [...items].sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.module.localeCompare(b.module));
+    return [...items]
+      .map((item) => ({ ...item, label: moduleLabel(item.module) }))
+      .sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.label.localeCompare(b.label, 'es'));
   });
 
   protected readonly cpuTrend = computed(() => seriesTrend(this.data()?.host.series.cpu ?? []));
@@ -404,6 +476,12 @@ export class HomePage {
     }
     return host.load1m / host.cpus;
   });
+
+  protected readonly chartRangeMs = computed(() => rangeSeconds(this.rangeId()) * 1000);
+
+  protected readonly chartStripKey = computed(
+    () => this.data()?.agentId || this.data()?.host.id || this.agentControl.value || '',
+  );
 
   protected readonly cpuChart = computed(() => {
     this.theme.mode();
@@ -514,7 +592,7 @@ export class HomePage {
       if (this.kiosk.active()) {
         this.refreshBeforeKiosk = this.refreshControl.value;
         if (this.refreshControl.value === 'off') {
-          this.refreshControl.setValue('10s');
+          this.refreshControl.setValue('30s');
         }
         return;
       }
@@ -549,12 +627,12 @@ export class HomePage {
           }
           const hostId = routeId || ((section === 'host' || section === 'agent') ? agentId : '');
           const ms = refreshMs(refresh);
-          const ticks = ms === 0 ? of(0) : interval(ms).pipe(startWith(0));
-          return ticks.pipe(switchMap(() => of({ range, hostId })));
+          const ticks = ms <= 0 ? of(0) : timer(0, ms);
+          return ticks.pipe(switchMap(() => this.dashboardRequest(hostId || undefined, range)));
         }),
         takeUntilDestroyed(),
       )
-      .subscribe(({ range, hostId }) => this.load(hostId || undefined, range));
+      .subscribe();
   }
 
   protected onHostTab(index: number): void {
@@ -679,7 +757,7 @@ export class HomePage {
   }
 
   protected reload(): void {
-    this.load(this.agentControl.value || undefined, this.rangeControl.value);
+    this.dashboardRequest(this.agentControl.value || undefined, this.rangeControl.value).subscribe();
   }
 
   protected toggleKiosk(): void {
@@ -728,7 +806,7 @@ export class HomePage {
     return 'hosts';
   }
 
-  private load(agentId?: string, range = this.rangeControl.value): void {
+  private dashboardRequest(agentId?: string, range = this.rangeControl.value) {
     const query = new URLSearchParams();
     if (agentId) {
       query.set('host_id', agentId);
@@ -738,19 +816,21 @@ export class HomePage {
       query.set('tenant_id', tenantId);
     }
     query.set('range', range);
-    this.http.get<DashboardResponse>(`${API_BASE_URL}/v1/dashboard?${query.toString()}`).subscribe({
-      next: (value) => {
+    return this.http.get<DashboardResponse>(`${API_BASE_URL}/v1/dashboard?${query.toString()}`).pipe(
+      tap((value) => {
         this.data.set(value);
         this.error.set(null);
         const selectedHost = value.host.id ?? value.agentId;
         if (selectedHost && selectedHost !== this.agentControl.value) {
           this.agentControl.setValue(selectedHost, { emitEvent: false });
         }
-      },
-      error: () => {
-        this.data.set(null);
-        this.error.set('No se pudieron leer las series. Compruebe Prometheus y la API.');
-      },
-    });
+      }),
+      catchError(() => {
+        if (!this.data()) {
+          this.error.set('No se pudieron leer las series. Compruebe Prometheus y la API.');
+        }
+        return EMPTY;
+      }),
+    );
   }
 }

@@ -1,4 +1,5 @@
 import type { EChartsOption } from 'echarts';
+import { timeAxisLabel, timeAxisStep, timeAxisTicks } from '../../shared/eku/chart/time-axis';
 import type { NamedSeries, SeriesPoint } from './dashboard.types';
 
 export function token(name: string): string {
@@ -329,10 +330,28 @@ export function volumeFromLines(lines: Array<{ ts: number }>): { points: SeriesP
 
 type AxisKind = 'percent' | 'bytes' | 'bytesRate' | 'number';
 
+export type ChartWindow = { min: number; max: number };
+
+function axisTime(window: ChartWindow | undefined, rangeMs: number, color: string) {
+  const step = timeAxisStep(rangeMs);
+  const ticks = window ? timeAxisTicks(window.min, window.max) : undefined;
+  return {
+    axisTick: { show: true, alignWithLabel: false, customValues: ticks, lineStyle: { color } },
+    axisLabel: {
+      color,
+      fontSize: 10,
+      hideOverlap: true,
+      customValues: ticks,
+      formatter: (value: number) => timeAxisLabel(value, step),
+    },
+  };
+}
+
 export function areaOption(
   series: Array<{ name: string; points: SeriesPoint[]; color?: string }>,
   kind: AxisKind,
   stacked = false,
+  window?: ChartWindow,
 ): EChartsOption {
   const axis = token('--eku-chart-axis');
   const grid = token('--eku-chart-grid');
@@ -340,9 +359,9 @@ export function areaOption(
   const colors = series.map((item, index) => item.color || palette()[index % palette().length]);
   return {
     color: colors,
-    animationDuration: 180,
-    animationDurationUpdate: 180,
-    grid: { left: 48, right: 10, top: series.length > 1 ? 26 : 12, bottom: 22, containLabel: false },
+    animationDuration: 0,
+    animationDurationUpdate: 0,
+    grid: { left: 48, right: 16, top: series.length > 1 ? 26 : 12, bottom: 26, containLabel: false },
     tooltip: {
       trigger: 'axis',
       backgroundColor: token('--eku-chart-tooltip-surface'),
@@ -365,21 +384,12 @@ export function areaOption(
             textStyle: { color: label, fontSize: 11 },
           }
         : undefined,
-    dataZoom: [
-      {
-        type: 'inside',
-        filterMode: 'none',
-        disabled: true,
-        zoomOnMouseWheel: false,
-        moveOnMouseWheel: false,
-        moveOnMouseMove: false,
-      },
-    ],
     xAxis: {
       type: 'time',
+      min: window?.min,
+      max: window?.max,
+      ...axisTime(window, window ? window.max - window.min : 900_000, axis),
       axisLine: { lineStyle: { color: axis, width: 1 } },
-      axisTick: { show: false },
-      axisLabel: { color: axis, fontSize: 10, hideOverlap: true },
       splitLine: { show: false },
     },
     yAxis: {
@@ -426,11 +436,17 @@ export function connectionsByProtocol(items: NamedSeries[], protocol: 'tcp' | 'o
     }));
 }
 
-export function namedArea(items: NamedSeries[], kind: AxisKind, stacked = true): EChartsOption {
+export function namedArea(
+  items: NamedSeries[],
+  kind: AxisKind,
+  stacked = true,
+  window?: ChartWindow,
+): EChartsOption {
   return areaOption(
     items.map((item) => ({ name: item.state, points: item.values })),
     kind,
     stacked,
+    window,
   );
 }
 

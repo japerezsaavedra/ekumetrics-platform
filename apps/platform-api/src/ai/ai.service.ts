@@ -14,6 +14,7 @@ import {
   type AiProvider,
   type AiServiceDef,
 } from './ai.providers';
+import { composeInvestigatorPrompt, userComplement } from './investigator-prompt';
 
 type HolmesChatResponse = {
   analysis?: string;
@@ -25,6 +26,7 @@ type StoredAiSettings = {
   model: string;
   apiKey: string | null;
   baseUrl: string | null;
+  systemPrompt: string | null;
 };
 
 type SaveAiSettingsInput = {
@@ -32,6 +34,7 @@ type SaveAiSettingsInput = {
   model?: string;
   apiKey?: string;
   baseUrl?: string;
+  systemPrompt?: string;
 };
 
 export type HostSnapshot = {
@@ -109,6 +112,7 @@ export class AiService {
       model: status.active.model,
       baseUrl: stored?.baseUrl ?? '',
       hasApiKey: Boolean(stored?.apiKey),
+      systemPrompt: userComplement(stored?.systemPrompt),
       services: status.services,
     };
   }
@@ -126,11 +130,13 @@ export class AiService {
       (existing?.service === service.id ? existing.baseUrl : null) ||
       service.baseUrl ||
       null;
+    const systemPrompt = userComplement(input.systemPrompt) || null;
     const next: StoredAiSettings = {
       service: service.id,
       model,
       apiKey,
       baseUrl,
+      systemPrompt,
     };
     if (!this.isServiceConfigured(service, next)) {
       throw new BadRequestException(
@@ -147,12 +153,14 @@ export class AiService {
         model: next.model,
         apiKey: next.apiKey,
         baseUrl: next.baseUrl,
+        systemPrompt: next.systemPrompt,
       },
       update: {
         service: next.service,
         model: next.model,
         apiKey: next.apiKey,
         baseUrl: next.baseUrl,
+        systemPrompt: next.systemPrompt,
       },
     });
     return {
@@ -160,10 +168,16 @@ export class AiService {
       model: saved.model,
       baseUrl: saved.baseUrl ?? '',
       hasApiKey: Boolean(saved.apiKey),
+      systemPrompt: userComplement(saved.systemPrompt),
     };
   }
 
-  async ask(question: string, providerInput?: string, modelInput?: string) {
+  async ask(
+    question: string,
+    providerInput?: string,
+    modelInput?: string,
+    tenantInput?: string,
+  ) {
     const trimmed = question.trim();
     if (!trimmed) {
       throw new BadRequestException('La pregunta es obligatoria');
@@ -177,8 +191,9 @@ export class AiService {
     }
 
     const model = this.resolveModel(service, modelInput || stored?.model);
-    const { facts, snapshot } = await this.investigationContext(trimmed);
-    const result = await this.callHolmes(trimmed, facts, model);
+    const tenantId = this.sanitize(tenantInput);
+    const { facts, snapshot } = await this.investigationContext(trimmed, tenantId);
+    const result = await this.callHolmes(trimmed, facts, model, stored?.systemPrompt);
     const analysis = this.composeAnalysis(snapshot, result.analysis);
 
     const saved = await this.prisma.aiInquiry.create({
@@ -203,11 +218,15 @@ export class AiService {
     };
   }
 
-  async snapshot(agentIdInput?: string | null): Promise<HostSnapshot | null> {
+  async snapshot(
+    agentIdInput?: string | null,
+    tenantInput?: string | null,
+  ): Promise<HostSnapshot | null> {
     const agentId = (agentIdInput ?? '').trim().replace(/"/g, '');
     if (!agentId) {
       return null;
     }
+    const tenantId = this.sanitize(tenantInput ?? undefined);
     try {
       const cpuQuery = `1 - sum(rate(system_cpu_time_seconds_total{agent_id="${agentId}",state="idle"}[5m])) / sum(rate(system_cpu_time_seconds_total{agent_id="${agentId}"}[5m]))`;
       const [identity, cpus, cpu, load1, load5, load15, mem, logs, cpuSeries] =
@@ -225,6 +244,9 @@ export class AiService {
           this.promRange(cpuQuery, 3600, 60),
         ]);
       const ident = identity[0]?.metric ?? {};
+      if (tenantId && ident.tenant_id && ident.tenant_id !== tenantId) {
+        return null;
+      }
       const finite = (value: number | undefined) =>
         value !== undefined && Number.isFinite(value) ? value : null;
       const cpuHostPercent =
@@ -308,6 +330,7 @@ export class AiService {
         model: row.model,
         apiKey: row.apiKey,
         baseUrl: row.baseUrl,
+        systemPrompt: row.systemPrompt,
       };
     } catch {
       return null;
@@ -442,9 +465,9 @@ export class AiService {
       case 'ollama':
         return 'qwen2.5:14b';
       case 'openai':
-        return this.config.get<string>('OPENAI_MODEL')?.trim() || 'gpt-4.1-mini';
+        return this.config.get<string>('OPENAI_MODEL')?.trim() || 'gpt-5.6';
       case 'anthropic':
-        return this.config.get<string>('ANTHROPIC_MODEL')?.trim() || 'claude-sonnet-4-5';
+        return this.config.get<string>('ANTHROPIC_MODEL')?.trim() || 'claude-sonnet-5';
       case 'openai_compat':
         return this.config.get<string>('AI_COMPAT_MODEL')?.trim() || 'unknown';
       default:
@@ -459,17 +482,20 @@ export class AiService {
     );
   }
 
-  private async investigationContext(question: string): Promise<{
+  private async investigationContext(
+    question: string,
+    tenantId?: string,
+  ): Promise<{
     facts: string;
     snapshot: HostSnapshot | null;
   }> {
-    const agents = await this.listConnectedAgents();
+    const agents = await this.listConnectedAgents(tenantId);
     const named = this.extractAgentId(question);
     const targetIds = named
       ? [named]
       : agents.slice(0, 5).map((item) => item.agentId);
     const snapshots = (
-      await Promise.all(targetIds.map((id) => this.snapshot(id)))
+      await Promise.all(targetIds.map((id) => this.snapshot(id, tenantId)))
     ).filter((item): item is HostSnapshot => Boolean(item));
     return {
       facts: this.contextFacts(agents, snapshots),
@@ -477,11 +503,12 @@ export class AiService {
     };
   }
 
-  private async listConnectedAgents(): Promise<
+  private async listConnectedAgents(tenantId?: string): Promise<
     Array<{ agentId: string; tenantId: string | null; siteId: string | null }>
   > {
     try {
-      const rows = await this.promInstant('ekms_agent_identity');
+      const selector = tenantId ? `{tenant_id="${tenantId}"}` : '';
+      const rows = await this.promInstant(`ekms_agent_identity${selector}`);
       const unique = new Map<
         string,
         { agentId: string; tenantId: string | null; siteId: string | null }
@@ -762,16 +789,8 @@ export class AiService {
     };
   }
 
-  private investigatorPrompt(): string {
-    return [
-      'Eres los ojos expertos de operaciones de Ekumetrics.',
-      'Responda solo la pregunta, en espanol, en texto plano.',
-      'Prohibido markdown: nada de asteriscos, almohadillas, rayas ---, ni backticks.',
-      'No use titulos, listas con viñetas ni etiquetas como lectura_experta.',
-      'No agregue datos, logs ni metricas que no pidieron.',
-      'Si preguntan si hay anomalias, diga si esta bien o no y por que, en dos o tres frases.',
-      'Use solo los hechos. No invente Kubernetes, PromQL ni kubectl.',
-    ].join(' ');
+  private investigatorPrompt(custom?: string | null): string {
+    return composeInvestigatorPrompt(custom);
   }
 
   private composeAnalysis(_snapshot: HostSnapshot | null, explanation: string): string {
@@ -820,7 +839,7 @@ export class AiService {
     ].join('\n');
   }
 
-  private async callHolmes(question: string, facts: string, model: string) {
+  private async callHolmes(question: string, facts: string, model: string, customPrompt?: string | null) {
     const url = `${this.holmesUrl()}/api/chat`;
     const ask = facts ? `${facts}\n\nPregunta del usuario: ${question}` : question;
     const holmesModel = model.includes('/') ? model : `openai/${model}`;
@@ -832,7 +851,7 @@ export class AiService {
         body: JSON.stringify({
           ask,
           model: holmesModel,
-          additional_system_prompt: this.investigatorPrompt(),
+          additional_system_prompt: this.investigatorPrompt(customPrompt),
         }),
         signal: AbortSignal.timeout(180_000),
       });
@@ -865,7 +884,7 @@ export class AiService {
     service: AiServiceDef,
     stored?: StoredAiSettings | null,
   ) {
-    const system = this.investigatorPrompt();
+    const system = this.investigatorPrompt(stored?.systemPrompt);
     const user = facts ? `${facts}\n\nPregunta del usuario: ${question}` : question;
     try {
       if (provider === 'anthropic') {
@@ -998,5 +1017,9 @@ export class AiService {
       object: 'chat.completion',
       choices: [{ message: { role: 'assistant', content: result.analysis } }],
     };
+  }
+
+  private sanitize(value?: string): string {
+    return (value ?? '').trim().replace(/[^A-Za-z0-9._-]/g, '');
   }
 }

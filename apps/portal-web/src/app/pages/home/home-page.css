@@ -98,6 +98,10 @@
   gap: var(--eku-space-3);
 }
 
+.home__tile-metrics--four {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .home__tile-metrics span {
   display: flex;
   flex-direction: column;
@@ -447,6 +451,7 @@
   letter-spacing: 0.04em;
 }
 
+.home__chip.is-ok,
 .home__util.is-ok .home__chip {
   color: var(--eku-healthy);
   border-color: color-mix(in srgb, var(--eku-healthy) 40%, transparent);
@@ -459,6 +464,7 @@
   background: color-mix(in srgb, var(--eku-warning) 12%, var(--eku-surface));
 }
 
+.home__chip.is-crit,
 .home__util.is-crit .home__chip {
   color: var(--eku-critical);
   border-color: color-mix(in srgb, var(--eku-critical) 40%, transparent);
@@ -914,6 +920,12 @@
   overflow-wrap: anywhere;
 }
 
+.home__facts small {
+  color: var(--eku-text-tertiary, var(--eku-text-secondary));
+  font-family: var(--eku-font-mono);
+  font-size: 0.7rem;
+}
+
 .home__modules--grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--eku-space-2);
@@ -934,7 +946,6 @@
   gap: var(--eku-space-3);
   min-height: 1.75rem;
   color: var(--eku-text-secondary);
-  font-family: var(--eku-font-mono);
   font-size: 0.78rem;
 }
 

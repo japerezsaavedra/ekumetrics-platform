@@ -42,11 +42,12 @@ model User {
   id          String   @id @default(cuid())
   tenantId    String
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email       String
-  displayName String
-  role        String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  email               String
+  displayName         String
+  role                String
+  mustChangePassword  Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   assignedIncidents Incident[]
 
@@ -156,14 +157,15 @@ model AiInquiry {
 }
 
 model AiSettings {
-  id        String   @id @default(cuid())
-  slot      String   @unique @default("default")
-  service   String
-  model     String
-  apiKey    String?
-  baseUrl   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  slot         String   @unique @default("default")
+  service      String
+  model        String
+  apiKey       String?
+  baseUrl      String?
+  systemPrompt String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([slot])
 }

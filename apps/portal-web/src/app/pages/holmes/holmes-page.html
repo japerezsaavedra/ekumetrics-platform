@@ -1,7 +1,10 @@
 <section class="holmes">
   <eku-page-header title="EkuAssistant AI">
     <p>
-      Sesiones de consulta guardadas en este navegador.
+      Historial de este usuario en el tenant actual.
+      @if (scopeHint(); as scope) {
+        {{ scope }}.
+      }
       @if (status()?.active; as active) {
         {{ active.label }}
         @if (!active.configured) {

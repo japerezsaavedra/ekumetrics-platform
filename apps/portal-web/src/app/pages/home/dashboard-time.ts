@@ -1,18 +1,21 @@
-const STORAGE_RANGE = 'eku-dashboard-range';
-const STORAGE_REFRESH = 'eku-dashboard-refresh';
+const STORAGE_RANGE = 'eku-dashboard-range-v3';
+const STORAGE_REFRESH = 'eku-dashboard-refresh-v3';
 
 export const DASHBOARD_RANGES = [
-  { id: '15m', label: 'Ultimos 15 min', seconds: 900 },
-  { id: '1h', label: 'Ultima hora', seconds: 3600 },
-  { id: '3h', label: 'Ultimas 3 h', seconds: 10800 },
-  { id: '6h', label: 'Ultimas 6 h', seconds: 21600 },
-  { id: '12h', label: 'Ultimas 12 h', seconds: 43200 },
-  { id: '24h', label: 'Ultimas 24 h', seconds: 86400 },
-  { id: '7d', label: 'Ultimos 7 dias', seconds: 604800 },
+  { id: '1m', label: 'Último minuto', seconds: 60 },
+  { id: '5m', label: 'Últimos 5 min', seconds: 300 },
+  { id: '15m', label: 'Últimos 15 min', seconds: 900 },
+  { id: '1h', label: 'Última hora', seconds: 3600 },
+  { id: '3h', label: 'Últimas 3 h', seconds: 10800 },
+  { id: '6h', label: 'Últimas 6 h', seconds: 21600 },
+  { id: '12h', label: 'Últimas 12 h', seconds: 43200 },
+  { id: '24h', label: 'Últimas 24 h', seconds: 86400 },
+  { id: '7d', label: 'Últimos 7 días', seconds: 604800 },
 ] as const;
 
 export const DASHBOARD_REFRESHES = [
   { id: 'off', label: 'Off', ms: 0 },
+  { id: '1s', label: 'Live 1s', ms: 1000 },
   { id: '5s', label: '5s', ms: 5000 },
   { id: '10s', label: '10s', ms: 10_000 },
   { id: '30s', label: '30s', ms: 30_000 },
@@ -28,7 +31,7 @@ export function readRange(): DashboardRangeId {
 }
 
 export function readRefresh(): DashboardRefreshId {
-  return pickId(localStorage.getItem(STORAGE_REFRESH), DASHBOARD_REFRESHES, '10s');
+  return pickId(localStorage.getItem(STORAGE_REFRESH), DASHBOARD_REFRESHES, '30s');
 }
 
 export function persistTime(range: string, refresh: string): void {
@@ -41,7 +44,7 @@ export function rangeSeconds(id: string): number {
 }
 
 export function refreshMs(id: string): number {
-  return DASHBOARD_REFRESHES.find((item) => item.id === id)?.ms ?? 10_000;
+  return DASHBOARD_REFRESHES.find((item) => item.id === id)?.ms ?? 30_000;
 }
 
 export function rangeLabel(id: string): string {

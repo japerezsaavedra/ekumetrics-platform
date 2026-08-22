@@ -1,15 +1,21 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { KeycloakAdminService } from '../auth/keycloak-admin';
 import { PrismaService } from '../prisma/prisma.service';
+import { buildAgentYaml } from './agent-yaml';
 
 const OPERATOR_SLUG = 'default';
 
 @Injectable()
 export class TenantsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly keycloak: KeycloakAdminService,
+  ) {}
 
-  async list(_operatorSlug?: string) {
+  async list(actorSlug?: string, operator = false) {
     await this.ensureOperator();
     return this.prisma.tenant.findMany({
+      where: operator ? undefined : { slug: this.slugify(actorSlug) || 'default' },
       orderBy: [{ slug: 'asc' }],
       include: {
         _count: { select: { agents: true, users: true, sites: true } },
@@ -54,7 +60,7 @@ export class TenantsService {
     if (exists) {
       throw new ConflictException(`Ya existe el tenant ${slug}.`);
     }
-    return this.prisma.tenant.create({
+    const tenant = await this.prisma.tenant.create({
       data: {
         name,
         slug,
@@ -64,6 +70,7 @@ export class TenantsService {
             email: adminEmail,
             displayName: adminName,
             role: 'admin',
+            mustChangePassword: true,
           },
         },
         sites: {
@@ -76,6 +83,18 @@ export class TenantsService {
         _count: { select: { agents: true, users: true, sites: true } },
       },
     });
+    try {
+      const temporaryPassword = await this.keycloak.provisionUser({
+        email: adminEmail,
+        displayName: adminName,
+        role: 'admin',
+        tenant: slug,
+      });
+      return { ...tenant, temporaryPassword };
+    } catch (error) {
+      await this.prisma.tenant.delete({ where: { id: tenant.id } });
+      throw error;
+    }
   }
 
   async listUsers(actorSlug?: string) {
@@ -110,10 +129,51 @@ export class TenantsService {
     if (exists) {
       throw new ConflictException(`Ese correo ya existe en ${tenant.slug}.`);
     }
-    return this.prisma.user.create({
-      data: { tenantId: tenant.id, email, displayName, role },
+    const user = await this.prisma.user.create({
+      data: { tenantId: tenant.id, email, displayName, role, mustChangePassword: true },
       include: { tenant: { select: { name: true, slug: true, emailDomain: true } } },
     });
+    try {
+      const temporaryPassword = await this.keycloak.provisionUser({
+        email,
+        displayName,
+        role,
+        tenant: tenant.slug,
+      });
+      return { ...user, temporaryPassword };
+    } catch (error) {
+      await this.prisma.user.delete({ where: { id: user.id } });
+      throw error;
+    }
+  }
+
+  async updateUser(actorSlug?: string, userId?: string, nameInput?: string, roleInput?: string) {
+    const current = await this.requireUser(actorSlug, userId);
+    const displayName = (nameInput ?? '').trim();
+    const role = (roleInput ?? current.role).trim() || current.role;
+    if (!displayName) {
+      throw new ConflictException('El nombre del usuario es obligatorio.');
+    }
+    if (role !== 'admin' && role !== 'viewer') {
+      throw new ConflictException('El rol debe ser admin o viewer.');
+    }
+    const user = await this.prisma.user.update({
+      where: { id: current.id },
+      data: { displayName, role },
+      include: { tenant: { select: { name: true, slug: true, emailDomain: true } } },
+    });
+    await this.keycloak.updateUser(user.email, displayName, role);
+    return user;
+  }
+
+  async removeUser(actorSlug?: string, actorEmail?: string, userId?: string) {
+    const current = await this.requireUser(actorSlug, userId);
+    if (actorEmail && current.email === actorEmail.trim().toLowerCase()) {
+      throw new ForbiddenException('No puede eliminar su propia cuenta.');
+    }
+    await this.keycloak.deleteUser(current.email);
+    await this.prisma.user.delete({ where: { id: current.id } });
+    return { id: current.id };
   }
 
   async listSites(actorSlug?: string, tenantSlug?: string) {
@@ -157,12 +217,63 @@ export class TenantsService {
     });
   }
 
-  async listAgents(slugInput?: string) {
-    const tenant = await this.requireTenant(slugInput);
-    return this.prisma.agent.findMany({
+  async updateSite(actorSlug?: string, tenantSlug?: string, siteId?: string, nameInput?: string, slugInput?: string) {
+    const tenant = await this.requireManagedTenant(actorSlug, tenantSlug || actorSlug);
+    const site = await this.prisma.site.findFirst({ where: { id: siteId, tenantId: tenant.id } });
+    if (!site) {
+      throw new NotFoundException('El sitio no existe.');
+    }
+    const name = (nameInput ?? '').trim() || site.name;
+    const slug = this.slugify(slugInput) || site.slug;
+    if (slug !== site.slug) {
+      const exists = await this.prisma.site.findUnique({
+        where: { tenantId_slug: { tenantId: tenant.id, slug } },
+      });
+      if (exists) {
+        throw new ConflictException(`Ya existe el sitio ${slug} en ${tenant.slug}.`);
+      }
+      await this.prisma.agent.updateMany({
+        where: { tenantId: tenant.id, siteId: site.slug },
+        data: { siteId: slug },
+      });
+    }
+    return this.prisma.site.update({
+      where: { id: site.id },
+      data: { name, slug },
+    });
+  }
+
+  async removeSite(actorSlug?: string, tenantSlug?: string, siteId?: string) {
+    const tenant = await this.requireManagedTenant(actorSlug, tenantSlug || actorSlug);
+    const site = await this.prisma.site.findFirst({ where: { id: siteId, tenantId: tenant.id } });
+    if (!site) {
+      throw new NotFoundException('El sitio no existe.');
+    }
+    const remaining = await this.prisma.site.count({ where: { tenantId: tenant.id } });
+    if (remaining <= 1) {
+      throw new ConflictException('El tenant debe conservar al menos un sitio.');
+    }
+    const agents = await this.prisma.agent.count({
+      where: { tenantId: tenant.id, siteId: site.slug },
+    });
+    if (agents) {
+      throw new ConflictException('Elimine primero los agentes de este sitio.');
+    }
+    await this.prisma.site.delete({ where: { id: site.id } });
+    return { id: site.id };
+  }
+
+  async listAgents(actorSlug?: string, slugInput?: string) {
+    const tenant = await this.requireManagedTenant(actorSlug, slugInput);
+    const agents = await this.prisma.agent.findMany({
       where: { tenantId: tenant.id },
       orderBy: { agentId: 'asc' },
     });
+    return agents.map((agent) => ({
+      ...agent,
+      tenantSlug: tenant.slug,
+      yaml: this.yamlFor(tenant.slug, agent.siteId, agent.agentId, agent.mode),
+    }));
   }
 
   async addAgent(
@@ -195,6 +306,83 @@ export class TenantsService {
     };
   }
 
+  async updateAgent(
+    actorSlug?: string,
+    slugInput?: string,
+    id?: string,
+    siteIdInput?: string,
+    modeInput?: string,
+  ) {
+    const tenant = await this.requireManagedTenant(actorSlug, slugInput);
+    const agent = await this.prisma.agent.findFirst({ where: { id, tenantId: tenant.id } });
+    if (!agent) {
+      throw new NotFoundException('El agente no existe.');
+    }
+    const siteId = this.id(siteIdInput) || agent.siteId;
+    const mode = this.id(modeInput) || agent.mode;
+    const site = await this.prisma.site.findUnique({
+      where: { tenantId_slug: { tenantId: tenant.id, slug: siteId } },
+    });
+    if (!site) {
+      throw new ConflictException(`El sitio ${siteId} no existe en ${tenant.slug}.`);
+    }
+    const updated = await this.prisma.agent.update({
+      where: { id: agent.id },
+      data: { siteId, mode },
+    });
+    return {
+      ...updated,
+      tenantSlug: tenant.slug,
+      yaml: this.yamlFor(tenant.slug, siteId, updated.agentId, mode),
+    };
+  }
+
+  async removeAgent(actorSlug?: string, slugInput?: string, id?: string) {
+    const tenant = await this.requireManagedTenant(actorSlug, slugInput);
+    const agent = await this.prisma.agent.findFirst({ where: { id, tenantId: tenant.id } });
+    if (!agent) {
+      throw new NotFoundException('El agente no existe.');
+    }
+    await this.prisma.agent.delete({ where: { id: agent.id } });
+    return { id: agent.id };
+  }
+
+  async updateTenant(operatorSlug?: string, slugInput?: string, nameInput?: string, emailDomainInput?: string) {
+    this.assertOperator(operatorSlug);
+    const tenant = await this.requireTenant(slugInput);
+    const name = (nameInput ?? '').trim() || tenant.name;
+    const emailDomain = this.domain(emailDomainInput) || tenant.emailDomain;
+    if (!name) {
+      throw new ConflictException('El nombre del tenant es obligatorio.');
+    }
+    return this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { name, emailDomain },
+      include: {
+        users: { where: { role: 'admin' } },
+        sites: true,
+        _count: { select: { agents: true, users: true, sites: true } },
+      },
+    });
+  }
+
+  async removeTenant(operatorSlug?: string, slugInput?: string) {
+    this.assertOperator(operatorSlug);
+    const tenant = await this.requireTenant(slugInput);
+    if (tenant.slug === OPERATOR_SLUG) {
+      throw new ForbiddenException('El tenant default no se puede eliminar.');
+    }
+    const users = await this.prisma.user.findMany({
+      where: { tenantId: tenant.id },
+      select: { email: true },
+    });
+    for (const user of users) {
+      await this.keycloak.deleteUser(user.email);
+    }
+    await this.prisma.tenant.delete({ where: { id: tenant.id } });
+    return { id: tenant.id, slug: tenant.slug };
+  }
+
   async requireTenant(slugInput?: string) {
     await this.ensureOperator();
     const slug = this.slugify(slugInput || OPERATOR_SLUG);
@@ -203,6 +391,21 @@ export class TenantsService {
       throw new NotFoundException(`Tenant ${slug} no existe.`);
     }
     return tenant;
+  }
+
+  private async requireUser(actorSlug?: string, userId?: string) {
+    if (!userId) {
+      throw new NotFoundException('El usuario no existe.');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { tenant: { select: { slug: true } } },
+    });
+    if (!user) {
+      throw new NotFoundException('El usuario no existe.');
+    }
+    await this.requireManagedTenant(actorSlug, user.tenant.slug);
+    return user;
   }
 
   private async requireManagedTenant(actorSlug?: string, tenantSlug?: string) {
@@ -272,34 +475,7 @@ export class TenantsService {
   }
 
   private yamlFor(tenantId: string, site: string, agentId: string, mode: string) {
-    return [
-      'agent:',
-      '  environment: production',
-      `  site: ${site}`,
-      `  tenantId: ${tenantId}`,
-      `  agentId: ${agentId}`,
-      `  mode: ${mode}`,
-      '',
-      'servers:',
-      '  this:',
-      '    enabled: true',
-      '',
-      'snmp:',
-      '  enabled: false',
-      '  devices: []',
-      '',
-      'databases:',
-      '  enabled: false',
-      '  targets: []',
-      '',
-      'queues:',
-      '  enabled: false',
-      '  targets: []',
-      '',
-      'icewarp:',
-      '  enabled: false',
-      '  targets: []',
-    ].join('\n');
+    return buildAgentYaml({ tenantId, site, agentId, mode });
   }
 
   private slugify(value?: string) {

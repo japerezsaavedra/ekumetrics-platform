@@ -1,3 +1,100 @@
+.eku-grid-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface);
+}
+
+.eku-grid-table__row {
+  display: grid;
+  align-items: center;
+  gap: var(--eku-space-4);
+  min-height: 3.25rem;
+  padding: 0 var(--eku-space-4);
+  border-top: 1px solid var(--eku-border);
+}
+
+.eku-grid-table__row--head {
+  min-height: 2.5rem;
+  border-top: 0;
+  color: var(--eku-text-secondary);
+  font-size: 0.8rem;
+}
+
+.eku-grid-table__row--3 {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 0.8fr);
+}
+
+.eku-grid-table__row--4 {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 0.8fr) auto;
+}
+
+.eku-grid-table__actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: var(--eku-space-1);
+}
+
+.eku-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--eku-text-secondary);
+  cursor: pointer;
+}
+
+.eku-icon-btn:hover,
+.eku-icon-btn:focus-visible {
+  color: var(--eku-primary);
+}
+
+.eku-icon-btn--danger:hover,
+.eku-icon-btn--danger:focus-visible {
+  color: var(--eku-critical);
+}
+
+.eku-icon-btn .mat-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  font-size: 1.125rem;
+}
+
+.eku-grid-table__who {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.eku-grid-table__who small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--eku-text-secondary);
+  white-space: nowrap;
+}
+
+.eku-grid-table__empty {
+  margin: 0;
+  padding: var(--eku-space-5) var(--eku-space-4);
+  color: var(--eku-text-secondary);
+}
+
+@media (max-width: 47.99rem) {
+  .eku-grid-table__row--3,
+  .eku-grid-table__row--4 {
+    grid-template-columns: 1fr;
+    padding: var(--eku-space-3) var(--eku-space-4);
+  }
+}
+
 .mat-mdc-table {
   background: var(--eku-surface-elevated);
   color: var(--eku-text-primary);
