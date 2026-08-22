@@ -603,24 +603,78 @@ export class AiService {
     if (!base) {
       throw new BadRequestException('Falta la URL del modelo');
     }
+    const request = this.sanitizeUpstreamPayload(payload, model);
     const response = await fetch(`${base}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(creds.apiKey ? { Authorization: `Bearer ${creds.apiKey}` } : {}),
       },
-      body: JSON.stringify({ ...payload, model, stream: false }),
+      body: JSON.stringify(request),
       signal: AbortSignal.timeout(180_000),
     });
-    const body = (await response.json().catch(() => ({}))) as {
-      error?: { message?: string };
-    };
+    const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     if (!response.ok) {
-      throw new ServiceUnavailableException(
-        body.error?.message ?? `El modelo respondio ${response.status}`,
-      );
+      throw new ServiceUnavailableException(this.providerErrorMessage(body, response.status));
     }
     return body;
+  }
+
+  private sanitizeUpstreamPayload(
+    payload: Record<string, unknown>,
+    model: string,
+  ): Record<string, unknown> {
+    const request: Record<string, unknown> = { model, stream: false };
+    const keys = [
+      'messages',
+      'tools',
+      'tool_choice',
+      'max_tokens',
+      'max_completion_tokens',
+      'stop',
+      'n',
+      'user',
+      'response_format',
+    ] as const;
+    for (const key of keys) {
+      if (payload[key] !== undefined) {
+        request[key] = payload[key];
+      }
+    }
+    if (Array.isArray(request.tools) && request.tools.length === 0) {
+      delete request.tools;
+      delete request.tool_choice;
+    }
+    if (!this.rejectsSampling(model)) {
+      if (payload.temperature !== undefined) {
+        request.temperature = payload.temperature;
+      }
+      if (payload.top_p !== undefined) {
+        request.top_p = payload.top_p;
+      }
+    }
+    return request;
+  }
+
+  private rejectsSampling(model: string): boolean {
+    return /^grok-4(\.|$|-)/i.test(model);
+  }
+
+  private providerErrorMessage(body: Record<string, unknown>, status: number): string {
+    const err = body.error;
+    if (typeof err === 'string' && err.trim()) {
+      return err.trim();
+    }
+    if (err && typeof err === 'object') {
+      const message = (err as { message?: unknown }).message;
+      if (typeof message === 'string' && message.trim()) {
+        return message.trim();
+      }
+    }
+    if (typeof body.message === 'string' && body.message.trim()) {
+      return body.message.trim();
+    }
+    return `El modelo respondio ${status}`;
   }
 
   private resolveCredentials(
@@ -1305,7 +1359,7 @@ export class AiService {
       },
       body: JSON.stringify({
         model,
-        temperature: 0.1,
+        ...(this.rejectsSampling(model) ? {} : { temperature: 0.1 }),
         messages: [
           { role: 'system', content: system },
           { role: 'user', content: question },
