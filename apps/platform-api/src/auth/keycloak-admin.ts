@@ -195,7 +195,11 @@ export class KeycloakAdminService {
   }
 
   private baseUrl(): string {
-    return (this.config.get<string>('KEYCLOAK_URL') ?? 'http://localhost:8080').replace(/\/$/, '');
+    return (
+      this.config.get<string>('KEYCLOAK_INTERNAL_URL') ??
+      this.config.get<string>('KEYCLOAK_URL') ??
+      'http://localhost:8080'
+    ).replace(/\/$/, '');
   }
 
   private realm(): string {

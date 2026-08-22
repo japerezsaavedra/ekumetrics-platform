@@ -7,32 +7,33 @@ El código vive en `apps/`. El laboratorio, en `infrastructure/docker`.
 
 ## Arranque (laboratorio)
 
+Toda la plataforma, incluida API y portal:
+
 ```bash
-cp apps/platform-api/.env.example apps/platform-api/.env
 npm run lab:up
-npm run db:generate
-npm run db:migrate
-npm run api:dev
-npm run portal:dev
 ```
+
+La primera vez construye las imágenes. Para desarrollar API y portal en el host: `npm run lab:infra`, luego `api:dev` y `portal:dev`.
 
 | Servicio | URL |
 |---|---|
-| Portal | http://localhost:4200 — login en `/login`, descargas del agente en `/agente` |
-| API health | http://localhost:3000/health |
-| Grafana | http://localhost:3001 (ekumetrics / ekumetrics). Embebido en el dashboard del portal: Host, Agente y Logs |
+| Portal | http://localhost:4200 — login en `/login` |
+| API | http://localhost:3000/health |
+| Keycloak | http://localhost:8080 |
+| Grafana | http://localhost:3001 (ekumetrics / ekumetrics) |
 | Prometheus | http://localhost:9091 |
 | OTLP (agente) | `localhost:4317` (gRPC) y `localhost:4318` (HTTP, `/v1/logs`) |
 | PostgreSQL | `localhost:5432` |
 | NATS | `localhost:4222` |
-| EkuAssistant AI | http://localhost:4200/asistente — chat de investigacion (`npm run lab:ai`) |
-| Keycloak (login) | `npm run lab:iam` → http://localhost:8080. Portal: `/login` |
+| EkuAssistant AI | http://localhost:4200/asistente (`npm run lab:ai`) |
 
 Prometheus usa el puerto **9091** en el host para no chocar con el inventario del agente (`:9090`).
 
+En `srv-apps` (`10.10.0.2`) se usa `infrastructure/docker/.env` con `BIND_ADDR=10.10.0.2` y `PUBLIC_HOST=10.10.0.2`. El portal queda en http://10.10.0.2:4200.
+
 ## Agente
 
-No hace falta cambiar `agent-sap`. En laboratorio:
+No hace falta cambiar `ekumetrics-agent`. En laboratorio:
 
 ```yaml
 export:
@@ -45,11 +46,7 @@ Los eventos irán a `http://localhost:4318/v1/ekms/events`. Esa ruta se implemen
 
 ## Login (laboratorio)
 
-```bash
-npm run lab:iam
-```
-
-Abra http://localhost:4200/login. Usuarios del realm `ekumetrics`:
+Keycloak ya arranca con `npm run lab:up`. Abra http://localhost:4200/login. Usuarios del realm `ekumetrics`:
 
 | Usuario | Correo | Clave | Rol |
 |---|---|---|---|

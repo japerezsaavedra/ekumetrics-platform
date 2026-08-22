@@ -26,11 +26,15 @@
       "directAccessGrantsEnabled": true,
       "rootUrl": "http://localhost:4200",
       "baseUrl": "/",
-      "redirectUris": ["http://localhost:4200/*", "http://127.0.0.1:4200/*"],
-      "webOrigins": ["http://localhost:4200", "http://127.0.0.1:4200"],
+      "redirectUris": [
+        "http://localhost:4200/*",
+        "http://127.0.0.1:4200/*",
+        "http://10.10.0.2:4200/*"
+      ],
+      "webOrigins": ["http://localhost:4200", "http://127.0.0.1:4200", "http://10.10.0.2:4200"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:4200/*##http://127.0.0.1:4200/*"
+        "post.logout.redirect.uris": "http://localhost:4200/*##http://127.0.0.1:4200/*##http://10.10.0.2:4200/*"
       },
       "protocolMappers": [
         {

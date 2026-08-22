@@ -4,8 +4,9 @@
   "private": true,
   "description": "Ekumetrics Platform — plano de control, portal e ingesta del agente",
   "scripts": {
-    "lab:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
-    "lab:iam": "docker compose -f infrastructure/docker/docker-compose.yml --profile iam up -d",
+    "lab:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d --build",
+    "lab:infra": "docker compose -f infrastructure/docker/docker-compose.yml up -d postgres nats prometheus loki alertmanager grafana otel-collector keycloak",
+    "lab:iam": "docker compose -f infrastructure/docker/docker-compose.yml up -d keycloak",
     "lab:ai": "docker compose -f infrastructure/docker/docker-compose.yml --profile ai up -d",
     "lab:down": "docker compose -f infrastructure/docker/docker-compose.yml down",
     "lab:logs": "docker compose -f infrastructure/docker/docker-compose.yml logs -f",

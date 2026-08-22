@@ -159,4 +159,4 @@ El alta de usuario (Usuarios o primer admin del tenant) crea la cuenta en Prisma
 ## Referencias
 
 - Contrato de identidad del agente: `docs/adr/0001-stack-y-contrato-agente.md`
-- Rol y capacidades del binario: `agent-sap/docs/ROL.md` y `agent-sap/docs/USO.md`
+- Rol y capacidades del binario: `ekumetrics-agent/docs/ROL.md` y `ekumetrics-agent/docs/USO.md`

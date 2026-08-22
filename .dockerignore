@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/.angular
+**/generated
+**/.env
+**/.env.local
+**/.git
+**/coverage
+**/*.log
+**/.DS_Store

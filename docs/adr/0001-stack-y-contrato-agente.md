@@ -6,7 +6,7 @@
 
 ## Contexto
 
-El documento base de producto define Angular, NestJS, PostgreSQL y motores open source (Prometheus, Loki, Alertmanager, Grafana). El agente en `agent-sap` ya existe y no espera las APIs genéricas del Apéndice B (`POST /events`, enrolamiento HTTP). Empuja un contrato propio.
+El documento base de producto define Angular, NestJS, PostgreSQL y motores open source (Prometheus, Loki, Alertmanager, Grafana). El agente en `ekumetrics-agent` ya existe y no espera las APIs genéricas del Apéndice B (`POST /events`, enrolamiento HTTP). Empuja un contrato propio.
 
 ## Decisión
 
@@ -23,5 +23,5 @@ El documento base de producto define Angular, NestJS, PostgreSQL y motores open 
 ## Consecuencias
 
 - La Fase 1 debe implementar `/v1/ekms/events` y el receptor OTLP antes que enrolamiento o heartbeat HTTP.
-- Un agente de laboratorio apunta a `export.otlp.endpoint: "<lab>:4317"` sin cambios en `agent-sap`.
+- Un agente de laboratorio apunta a `export.otlp.endpoint: "<lab>:4317"` sin cambios en `ekumetrics-agent`.
 - El Apéndice B se versiona encima de este contrato, no al revés.

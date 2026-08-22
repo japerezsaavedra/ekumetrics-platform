@@ -104,7 +104,7 @@ export class AuthService {
     if (!token) {
       throw new UnauthorizedException('Inicie sesion.');
     }
-    const issuer = `${this.baseUrl()}/realms/${this.realm()}`;
+    const issuer = `${this.issuerUrl()}/realms/${this.realm()}`;
     try {
       const { payload } = await jwtVerify(token, this.keys(), {
         issuer,
@@ -151,8 +151,14 @@ export class AuthService {
     return value.toLowerCase().startsWith('bearer ') ? value.slice(7).trim() : '';
   }
 
-  private baseUrl(): string {
+  private issuerUrl(): string {
     return (this.config.get<string>('KEYCLOAK_URL') ?? 'http://localhost:8080').replace(/\/$/, '');
+  }
+
+  private baseUrl(): string {
+    return (
+      this.config.get<string>('KEYCLOAK_INTERNAL_URL') ?? this.issuerUrl()
+    ).replace(/\/$/, '');
   }
 
   private realm(): string {
