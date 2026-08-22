@@ -18,14 +18,29 @@
   flex-direction: column;
 }
 
-:host ::ng-deep .holmes__tabs .mat-mdc-tab-body-wrapper,
-:host ::ng-deep .holmes__tabs .mat-mdc-tab-body,
-:host ::ng-deep .holmes__tabs .mat-mdc-tab-body-content {
+:host ::ng-deep .holmes__tabs .mat-mdc-tab-body-wrapper {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+}
+
+:host ::ng-deep .holmes__tabs .mat-mdc-tab-body.mat-mdc-tab-body-active,
+:host ::ng-deep .holmes__tabs .mat-mdc-tab-body-active .mat-mdc-tab-body-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+:host ::ng-deep .holmes__tabs .mat-mdc-tab-body:not(.mat-mdc-tab-body-active) {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 :host ::ng-deep .holmes__tabs {
