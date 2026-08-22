@@ -29,6 +29,7 @@ type FactScope = {
   traces: boolean;
   forecast: boolean;
   hourStats: boolean;
+  dayStats: boolean;
 };
 
 type HolmesChatResponse = {
@@ -327,8 +328,8 @@ export class AiService {
           scope.logs
             ? this.lokiLines()
             : Promise.resolve({ source: '', lines: [] as string[] }),
-          scope.forecast || scope.hourStats
-            ? this.promRange(cpuQuery, 3600, 60)
+          scope.forecast || scope.hourStats || scope.dayStats
+            ? this.promRange(cpuQuery, scope.dayStats ? 86400 : 3600, scope.dayStats ? 120 : 60)
             : Promise.resolve([] as Array<[number, number]>),
         ]);
       const ident = identity[0]?.metric ?? {};
@@ -867,6 +868,7 @@ export class AiService {
       traces: false,
       forecast: true,
       hourStats: true,
+      dayStats: true,
     };
   }
 
@@ -876,6 +878,8 @@ export class AiService {
     const traces = /\b(trazas?|transacci[oó]n(?:es)?)\b/.test(q);
     const forecast = /\b(proyecci[oó]n|pron[oó]stico|tendencia)\b/.test(q);
     const hourStats = /\b(1\s*h|una hora|[uú]ltima hora|60\s*min)\b/.test(q);
+    const dayStats =
+      /\b(hoy|today|d[ií]a|24\s*h|pico|m[aá]ximo|maximo|peak)\b/.test(q);
     const listing = /\b(qu[eé] agentes|agentes tengo|agentes conectados)\b/.test(q);
     const host = !listing;
     return {
@@ -887,6 +891,7 @@ export class AiService {
       traces,
       forecast: forecast || hourStats,
       hourStats,
+      dayStats,
     };
   }
 
@@ -1247,7 +1252,13 @@ export class AiService {
         `red_descartes=${this.formatPerSec(snapshot.networkDropsPerSec)}`,
       );
     }
-    if (scope.hourStats) {
+    if (scope.dayStats) {
+      lines.push(
+        `cpu_media_24h=${pct(snapshot.assessment.cpuAvg1h)}`,
+        `cpu_max_24h=${pct(snapshot.assessment.cpuMax1h)}`,
+        'ventana_cpu=ultimas 24h o desde que hay muestras',
+      );
+    } else if (scope.hourStats) {
       lines.push(
         `cpu_media_1h=${pct(snapshot.assessment.cpuAvg1h)}`,
         `cpu_max_1h=${pct(snapshot.assessment.cpuMax1h)}`,
