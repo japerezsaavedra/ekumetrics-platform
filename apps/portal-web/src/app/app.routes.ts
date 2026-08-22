@@ -1,4 +1,4 @@
-import { Routes } from '@angular/router';
+import { Routes, UrlSegment } from '@angular/router';
 import { authGuard } from './core/auth.guard';
 import { AdminSitesPage } from './pages/admin/admin-sites-page';
 import { AdminUsersPage } from './pages/admin/admin-users-page';
@@ -11,18 +11,28 @@ import { TenantsPage } from './pages/tenants/tenants-page';
 
 const guarded = { canActivate: [authGuard] };
 
+const DASHBOARD_ROOTS = new Set([
+  'hosts',
+  'red',
+  'agentes',
+  'bases-de-datos',
+  'colas',
+  'icewarp',
+  'sap',
+]);
+
+function dashboardMatcher(segments: UrlSegment[]) {
+  const root = segments[0]?.path;
+  if (!root || !DASHBOARD_ROOTS.has(root)) {
+    return null;
+  }
+  return { consumed: segments };
+}
+
 export const routes: Routes = [
   { path: 'login', component: LoginPage },
   { path: '', redirectTo: 'hosts', pathMatch: 'full' },
-  { path: 'hosts', component: HomePage, ...guarded },
-  { path: 'hosts/:hostId', component: HomePage, ...guarded },
-  { path: 'red', component: HomePage, ...guarded },
-  { path: 'agentes', component: HomePage, ...guarded },
-  { path: 'agentes/:agentId', component: HomePage, ...guarded },
-  { path: 'bases-de-datos', component: HomePage, ...guarded },
-  { path: 'colas', component: HomePage, ...guarded },
-  { path: 'icewarp', component: HomePage, ...guarded },
-  { path: 'sap', component: HomePage, ...guarded },
+  { matcher: dashboardMatcher, component: HomePage, ...guarded },
   { path: 'logs', redirectTo: 'hosts', pathMatch: 'full' },
   { path: 'asistente', component: HolmesPage, ...guarded },
   { path: 'holmes', redirectTo: 'asistente', pathMatch: 'full' },
