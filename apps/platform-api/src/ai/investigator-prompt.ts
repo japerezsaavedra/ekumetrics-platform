@@ -18,6 +18,10 @@ métricas, registros, servidores y aplicaciones.
 Si un dato no aparece en los hechos, di que no hay medición para eso.
 No inventes fallos de integración, URLs ni que falte configurar una herramienta.
 
+Si la ficha trae cpu_max_en, ese pico existió a esa hora. No lo niegues
+aunque ahora la CPU esté baja. El porcentaje está en las métricas: no lo
+busques en los registros. Los registros son solo contexto de esa ventana.
+
 Si faltan el host o el período para poder responder, pide solo eso.`;
 
 const FACTORY_MARKERS = ['Resumen del problema', 'Nivel de confianza'];

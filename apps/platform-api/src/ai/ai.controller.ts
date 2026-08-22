@@ -10,6 +10,7 @@ type AskBody = {
   provider?: string;
   service?: string;
   model?: string;
+  history?: Array<{ role?: string; text?: string }>;
 };
 
 type SettingsBody = {
@@ -59,6 +60,13 @@ export class AiController {
       body.service ?? body.provider,
       body.model,
       actingTenant(user, headerSlug),
+      (body.history ?? [])
+        .filter((item) => item.text?.trim())
+        .map((item) => ({
+          role: item.role === 'assistant' ? 'assistant' : 'user',
+          text: item.text?.trim() ?? '',
+        }))
+        .slice(-8),
     );
   }
 

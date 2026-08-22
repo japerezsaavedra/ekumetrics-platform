@@ -3,7 +3,7 @@
 # El prompt de producto lo envia platform-api (additional_system_prompt).
 # Metricas las resuelve platform-api. Holmes investiga y explica.
 model: openai/qwen3.5:4b
-max_steps: 8
+max_steps: 2
 
 toolsets:
   kubernetes/core:
@@ -21,6 +21,4 @@ toolsets:
   prometheus/metrics:
     enabled: false
   grafana/loki:
-    enabled: true
-    config:
-      api_url: http://loki:3100
+    enabled: false

@@ -97,6 +97,7 @@ export type HostSnapshot = {
     findings: string[];
     cpuAvg1h: number | null;
     cpuMax1h: number | null;
+    cpuMaxAt: number | null;
   };
   traces: { available: boolean; note: string };
 };
@@ -224,6 +225,7 @@ export class AiService {
     providerInput?: string,
     modelInput?: string,
     tenantInput?: string,
+    history: Array<{ role: string; text: string }> = [],
   ) {
     const trimmed = question.trim();
     if (!trimmed) {
@@ -239,8 +241,15 @@ export class AiService {
 
     const model = this.resolveModel(service, modelInput || stored?.model);
     const tenantId = this.sanitize(tenantInput);
-    const { facts, snapshot } = await this.investigationContext(trimmed, tenantId);
-    const result = await this.callHolmes(trimmed, facts, model, stored?.systemPrompt);
+    const prior = history
+      .map((item) => `${item.role === 'assistant' ? 'asistente' : 'usuario'}: ${item.text}`)
+      .join('\n');
+    const corpus = [prior, trimmed].filter(Boolean).join('\n');
+    const { facts, snapshot } = await this.investigationContext(corpus, tenantId);
+    const askText = prior
+      ? `${trimmed}\n\nHilo reciente:\n${prior}`
+      : trimmed;
+    const result = await this.callHolmes(askText, facts, model, stored?.systemPrompt);
     const analysis = this.composeAnalysis(snapshot, result.analysis);
 
     const saved = await this.prisma.aiInquiry.create({
@@ -269,6 +278,7 @@ export class AiService {
     agentIdInput?: string | null,
     tenantInput?: string | null,
     scope: FactScope = this.fullScope(),
+    question = '',
   ): Promise<HostSnapshot | null> {
     const agentId = (agentIdInput ?? '').trim().replace(/"/g, '');
     if (!agentId) {
@@ -297,7 +307,6 @@ export class AiService {
         uptime,
         uptimeAlt,
         modules,
-        logs,
         cpuSeries,
       ] = await Promise.all([
           this.promInstant(`ekms_agent_identity${sel}`),
@@ -325,9 +334,6 @@ export class AiService {
           this.promInstant(`max(system_uptime${sel})`),
           this.promInstant(`max(system_uptime_seconds${sel})`),
           this.promInstant(`ekms_agent_module_enabled${sel}`),
-          scope.logs
-            ? this.lokiLines()
-            : Promise.resolve({ source: '', lines: [] as string[] }),
           scope.forecast || scope.hourStats || scope.dayStats
             ? this.promRange(cpuQuery, scope.dayStats ? 86400 : 3600, scope.dayStats ? 120 : 60)
             : Promise.resolve([] as Array<[number, number]>),
@@ -359,7 +365,11 @@ export class AiService {
           percent: (row.value / cpuStateTotal) * 100,
         }));
       const forecast = this.forecastCpu(cpuHostPercent, cpuSeries);
-      const stats = this.cpuStats(cpuSeries);
+      const stats = this.cpuStats(cpuSeries, this.extractCpuPercent(question));
+      const logs =
+        scope.logs || scope.dayStats
+          ? await this.lokiLines(stats.maxAt ?? undefined)
+          : { source: '', lines: [] as string[] };
       const host = {
         agentId: ident.agent_id ?? agentId,
         found: identity.length > 0 || cpus.length > 0 || memoryTotalBytes !== null,
@@ -790,7 +800,7 @@ export class AiService {
         ? agents.slice(0, 5).map((item) => item.agentId)
         : [];
     const snapshots = (
-      await Promise.all(targetIds.map((id) => this.snapshot(id, tenantId, scope)))
+      await Promise.all(targetIds.map((id) => this.snapshot(id, tenantId, scope, question)))
     ).filter((item): item is HostSnapshot => Boolean(item));
     return {
       facts: this.contextFacts(agents, snapshots, scope, Boolean(named)),
@@ -878,7 +888,12 @@ export class AiService {
     const traces = /\b(trazas?|transacci[oó]n(?:es)?)\b/.test(q);
     const forecast = /\b(proyecci[oó]n|pron[oó]stico|tendencia)\b/.test(q);
     const hourStats = /\b(1\s*h|una hora|[uú]ltima hora|60\s*min)\b/.test(q);
+    const investigate =
+      /\b(qu[eé]\s+pas[oó]|cuando|entonces|investiga|llegamos|ese pico|aquel pico)\b/.test(
+        q,
+      ) || /\d{1,3}(?:[.,]\d+)?\s*%/.test(q);
     const dayStats =
+      investigate ||
       /\b(hoy|today|d[ií]a|24\s*h|pico|m[aá]ximo|maximo|peak)\b/.test(q);
     const listing = /\b(qu[eé] agentes|agentes tengo|agentes conectados)\b/.test(q);
     const host = !listing;
@@ -887,7 +902,7 @@ export class AiService {
       load: host,
       memory: host,
       network: host,
-      logs,
+      logs: logs || investigate,
       traces,
       forecast: forecast || hourStats,
       hourStats,
@@ -958,16 +973,18 @@ export class AiService {
     return (this.config.get<string>('LOKI_URL') ?? 'http://127.0.0.1:3100').replace(/\/$/, '');
   }
 
-  private async lokiLines(): Promise<{ source: string; lines: string[] }> {
+  private async lokiLines(atUnix?: number): Promise<{ source: string; lines: string[] }> {
     const source = '{service_name="ekumetrics-agent"}';
     try {
-      const end = Date.now() * 1_000_000;
-      const start = end - 15 * 60 * 1_000_000_000;
+      const centerMs = (atUnix && atUnix > 1e9 ? atUnix * 1000 : Date.now());
+      const windowMs = 15 * 60 * 1000;
+      const end = (centerMs + windowMs) * 1_000_000;
+      const start = (centerMs - windowMs) * 1_000_000;
       const url = `${this.lokiUrl()}/loki/api/v1/query_range?${new URLSearchParams({
         query: source,
         start: String(start),
         end: String(end),
-        limit: '5',
+        limit: '20',
         direction: 'backward',
       }).toString()}`;
       const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
@@ -976,7 +993,7 @@ export class AiService {
       };
       const lines = (body.data?.result ?? [])
         .flatMap((stream) => stream.values ?? [])
-        .slice(0, 5)
+        .slice(0, 20)
         .map(([, line]) => this.logLine(line));
       return { source, lines };
     } catch {
@@ -1054,6 +1071,7 @@ export class AiService {
         findings: ['El agente no reporta metricas.'],
         cpuAvg1h: null,
         cpuMax1h: null,
+        cpuMaxAt: null,
       },
       traces: {
         available: false,
@@ -1062,23 +1080,66 @@ export class AiService {
     };
   }
 
-  private cpuStats(series: Array<[number, number]>): {
+  private cpuStats(
+    series: Array<[number, number]>,
+    target?: number | null,
+  ): {
     avg: number | null;
     max: number | null;
+    maxAt: number | null;
   } {
-    const values = series.map(([, value]) => value * 100).filter((value) => Number.isFinite(value));
-    if (!values.length) {
-      return { avg: null, max: null };
+    let max = Number.NEGATIVE_INFINITY;
+    let maxAt: number | null = null;
+    let match = Number.NEGATIVE_INFINITY;
+    let matchAt: number | null = null;
+    let matchDiff = Number.POSITIVE_INFINITY;
+    let sum = 0;
+    let count = 0;
+    for (const [ts, raw] of series) {
+      const value = raw * 100;
+      if (!Number.isFinite(value)) {
+        continue;
+      }
+      count += 1;
+      sum += value;
+      if (value > max) {
+        max = value;
+        maxAt = ts;
+      }
+      if (target != null) {
+        const diff = Math.abs(value - target);
+        if (diff < matchDiff) {
+          matchDiff = diff;
+          match = value;
+          matchAt = ts;
+        }
+      }
     }
-    return {
-      avg: values.reduce((sum, value) => sum + value, 0) / values.length,
-      max: Math.max(...values),
-    };
+    if (!count) {
+      return { avg: null, max: null, maxAt: null };
+    }
+    if (target != null && matchAt != null && matchDiff <= 1.5) {
+      return { avg: sum / count, max: match, maxAt: matchAt };
+    }
+    return { avg: sum / count, max, maxAt };
+  }
+
+  private extractCpuPercent(text: string): number | null {
+    const labeled = text.match(/(\d{1,3}(?:[.,]\d+)?)\s*%/);
+    const nearCpu = text.match(
+      /(?:cpu\D{0,24})(\d{1,3}(?:[.,]\d+))|(\d{1,3}(?:[.,]\d+))\s*(?:de\s+)?cpu/i,
+    );
+    const raw = labeled?.[1] ?? nearCpu?.[1] ?? nearCpu?.[2];
+    if (!raw) {
+      return null;
+    }
+    const value = Number(raw.replace(',', '.'));
+    return Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
   }
 
   private assessHost(
     host: Omit<HostSnapshot, 'assessment'>,
-    stats: { avg: number | null; max: number | null },
+    stats: { avg: number | null; max: number | null; maxAt: number | null },
   ): HostSnapshot['assessment'] {
     const findings: string[] = [];
     let verdict: HostSnapshot['assessment']['verdict'] = 'ok';
@@ -1099,6 +1160,7 @@ export class AiService {
         findings: ['Sin series de este agente.'],
         cpuAvg1h: stats.avg,
         cpuMax1h: stats.max,
+        cpuMaxAt: stats.maxAt,
       };
     }
     if (cpu !== null && cpu >= 85) {
@@ -1145,6 +1207,7 @@ export class AiService {
       findings,
       cpuAvg1h: stats.avg,
       cpuMax1h: stats.max,
+      cpuMaxAt: stats.maxAt,
     };
   }
 
@@ -1198,6 +1261,17 @@ export class AiService {
       return `${hours}h ${minutes}m`;
     }
     return `${minutes}m`;
+  }
+
+  private formatPeakTime(unix?: number | null): string {
+    if (!unix || !Number.isFinite(unix)) {
+      return 'sin datos';
+    }
+    const ms = unix > 1e12 ? unix : unix * 1000;
+    return new Date(ms).toLocaleString('es', {
+      dateStyle: 'short',
+      timeStyle: 'medium',
+    });
   }
 
   private factsText(snapshot: HostSnapshot | null, scope: FactScope): string {
@@ -1256,6 +1330,7 @@ export class AiService {
       lines.push(
         `cpu_media_24h=${pct(snapshot.assessment.cpuAvg1h)}`,
         `cpu_max_24h=${pct(snapshot.assessment.cpuMax1h)}`,
+        `cpu_max_en=${this.formatPeakTime(snapshot.assessment.cpuMaxAt)}`,
         'ventana_cpu=ultimas 24h o desde que hay muestras',
       );
     } else if (scope.hourStats) {
@@ -1275,7 +1350,10 @@ export class AiService {
       }
     }
     if (scope.logs) {
-      lines.push(`registros=${snapshot.logs.lines.length} lineas`);
+      lines.push(
+        `registros=${snapshot.logs.lines.length} lineas alrededor de ${this.formatPeakTime(snapshot.assessment.cpuMaxAt)}`,
+        'Los registros no contienen el porcentaje de CPU. No busques ese numero ahi.',
+      );
       for (const line of snapshot.logs.lines) {
         lines.push(`- ${line}`);
       }

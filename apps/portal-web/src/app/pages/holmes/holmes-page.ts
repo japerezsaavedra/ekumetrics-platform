@@ -145,7 +145,14 @@ export class HolmesPage {
     this.elapsed.set(0);
     this.stopTimer();
     this.timer = setInterval(() => this.elapsed.update((n) => n + 1), 1000);
-    this.http.post<AiAskResponse>(`${API_BASE_URL}/v1/ai/ask`, { question }).subscribe({
+    this.http
+      .post<AiAskResponse>(`${API_BASE_URL}/v1/ai/ask`, {
+        question,
+        history: this.messages()
+          .slice(-8)
+          .map((item) => ({ role: item.role, text: item.text })),
+      })
+      .subscribe({
       next: (value) => {
         this.stopTimer();
         const withReply = [
