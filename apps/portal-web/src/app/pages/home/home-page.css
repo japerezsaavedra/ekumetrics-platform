@@ -2,6 +2,18 @@
   width: 100%;
 }
 
+.home__stage {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.home__stage.is-away {
+  opacity: 0;
+  transform: translateY(0.45rem);
+  pointer-events: none;
+}
+
 .home__actions {
   display: flex;
   flex-wrap: wrap;

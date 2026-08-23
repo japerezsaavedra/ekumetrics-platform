@@ -170,15 +170,17 @@ export class HomePage {
   protected readonly rangeId = signal(readRange());
   protected readonly refreshId = signal(readRefresh());
   protected readonly data = signal<DashboardResponse | null>(null);
+  protected readonly hostSwitching = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly kioskOn = this.kiosk.active;
   protected readonly section = computed(() => this.sectionFrom(this.path() || this.router.url || '/'));
   protected readonly pageTitle = computed(() => {
+    const routeId = this.entityIdFrom(this.path() || this.router.url || '');
     if (this.section() === 'host') {
-      return this.hostTitle();
+      return routeId || this.hostTitle();
     }
     if (this.section() === 'agent') {
-      return this.data()?.agentId || TITLE_BY_SECTION.agent;
+      return routeId || this.data()?.agentId || TITLE_BY_SECTION.agent;
     }
     return TITLE_BY_SECTION[this.section()];
   });
@@ -626,9 +628,24 @@ export class HomePage {
             });
           }
           const hostId = routeId || ((section === 'host' || section === 'agent') ? agentId : '');
+          const shown = this.data()?.host.id ?? this.data()?.agentId ?? '';
+          const switchingHost =
+            (section === 'host' || section === 'agent') &&
+            Boolean(shown && hostId && shown !== hostId);
+          if (switchingHost) {
+            this.hostSwitching.set(true);
+          }
           const ms = refreshMs(refresh);
           const ticks = ms <= 0 ? of(0) : timer(0, ms);
-          return ticks.pipe(switchMap(() => this.dashboardRequest(hostId || undefined, range)));
+          return ticks.pipe(
+            switchMap((_tick, index) => {
+              const req = this.dashboardRequest(hostId || undefined, range);
+              if (switchingHost && index === 0) {
+                return timer(180).pipe(switchMap(() => req));
+              }
+              return req;
+            }),
+          );
         }),
         takeUntilDestroyed(),
       )
@@ -824,8 +841,12 @@ export class HomePage {
         if (selectedHost && selectedHost !== this.agentControl.value) {
           this.agentControl.setValue(selectedHost, { emitEvent: false });
         }
+        if (this.hostSwitching()) {
+          requestAnimationFrame(() => this.hostSwitching.set(false));
+        }
       }),
       catchError(() => {
+        this.hostSwitching.set(false);
         if (!this.data()) {
           this.error.set('No se pudieron leer las series. Compruebe Prometheus y la API.');
         }

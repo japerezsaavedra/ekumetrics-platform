@@ -295,6 +295,7 @@
     } @else if (section() === 'agent' && !board.agentId) {
       <eku-empty-state message="No hay identidad de agente en Prometheus." />
     } @else if (section() === 'agent') {
+      <div class="home__stage" [class.is-away]="hostSwitching()">
       <div class="home__stack">
         <div class="home__hostbar">
           <p class="home__crumb">
@@ -438,9 +439,11 @@
           }
         </article>
       </div>
+      </div>
     } @else if (section() === 'host' && !board.host.id) {
       <eku-empty-state message="No hay un host enviando métricas." />
     } @else if (section() === 'host') {
+      <div class="home__stage" [class.is-away]="hostSwitching()">
       <div class="home__hostbar">
         <p class="home__crumb">
           <a routerLink="/hosts">Hosts</a>
@@ -988,6 +991,7 @@
           </div>
         </mat-tab>
       </mat-tab-group>
+      </div>
     }
   }
 </section>
