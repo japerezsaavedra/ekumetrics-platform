@@ -58,7 +58,17 @@ import {
 import { CHART_HINTS } from './chart-hints';
 import type { DashboardHostOption, DashboardResponse } from './dashboard.types';
 
-type DashSection = 'hosts' | 'host' | 'network' | 'agents' | 'agent' | 'databases' | 'queues' | 'icewarp' | 'sap';
+type DashSection =
+  | 'hosts'
+  | 'host'
+  | 'network'
+  | 'agents'
+  | 'agent'
+  | 'databases'
+  | 'queues'
+  | 'icewarp'
+  | 'icewarp-host'
+  | 'sap';
 
 const HOST_TABS = ['resumen', 'procesos', 'disco', 'red', 'logs'] as const;
 const LOG_PAGE_SIZE = 20;
@@ -72,6 +82,7 @@ const TITLE_BY_SECTION: Record<DashSection, string> = {
   databases: 'Bases de datos',
   queues: 'Colas',
   icewarp: 'IceWarp',
+  'icewarp-host': 'IceWarp',
   sap: 'SAP',
 };
 
@@ -182,9 +193,14 @@ export class HomePage {
     if (this.section() === 'agent') {
       return routeId || this.data()?.agentId || TITLE_BY_SECTION.agent;
     }
+    if (this.section() === 'icewarp-host') {
+      return this.icewarpTitle() || routeId || TITLE_BY_SECTION.icewarp;
+    }
     return TITLE_BY_SECTION[this.section()];
   });
-  protected readonly showDashTools = computed(() => this.section() === 'host');
+  protected readonly showDashTools = computed(
+    () => this.section() === 'host' || this.section() === 'icewarp-host',
+  );
   protected readonly showHostSelect = computed(
     () => this.showDashTools() && this.hosts().length > 0,
   );
@@ -207,6 +223,9 @@ export class HomePage {
     }
     if (section === 'icewarp') {
       return `${this.icewarp().length} IceWarp`;
+    }
+    if (section === 'icewarp-host') {
+      return `${this.icewarpTitle()} · ${this.rangeText()}`;
     }
     if (section === 'sap') {
       return `${this.sap().length} sistemas SAP`;
@@ -256,6 +275,27 @@ export class HomePage {
   protected readonly networkDevices = computed(() => this.data()?.networkDevices ?? []);
   protected readonly queues = computed(() => this.data()?.queues ?? []);
   protected readonly icewarp = computed(() => this.data()?.icewarp ?? []);
+  protected readonly icewarpBoard = computed(() => this.data()?.icewarpBoard ?? null);
+  protected readonly icewarpTitle = computed(() => {
+    const board = this.icewarpBoard();
+    if (board?.name) {
+      return board.name;
+    }
+    const hostId = this.entityIdFrom(this.path() || this.router.url || '');
+    return this.icewarp().find((item) => item.hostId === hostId)?.name || hostId || 'IceWarp';
+  });
+  protected readonly icewarpSessionChart = computed(() =>
+    namedArea(this.icewarpBoard()?.series.sessions ?? [], 'number', false),
+  );
+  protected readonly icewarpMemoryChart = computed(() =>
+    namedArea(this.icewarpBoard()?.series.memory ?? [], 'bytes', false),
+  );
+  protected readonly icewarpSmtpChart = computed(() =>
+    namedArea(this.icewarpBoard()?.series.smtp ?? [], 'number', false),
+  );
+  protected readonly icewarpDefenseChart = computed(() =>
+    namedArea(this.icewarpBoard()?.series.defense ?? [], 'number', false),
+  );
   protected readonly sap = computed(() => this.data()?.sap ?? []);
   protected readonly hostNics = computed(() => {
     const hostId = this.data()?.host.id;
@@ -627,10 +667,14 @@ export class HomePage {
               replaceUrl: true,
             });
           }
-          const hostId = routeId || ((section === 'host' || section === 'agent') ? agentId : '');
-          const shown = this.data()?.host.id ?? this.data()?.agentId ?? '';
+          const hostId =
+            routeId || (section === 'host' || section === 'agent' || section === 'icewarp-host' ? agentId : '');
+          const shown =
+            section === 'icewarp-host'
+              ? (this.data()?.icewarpBoard?.hostId ?? '')
+              : (this.data()?.host.id ?? this.data()?.agentId ?? '');
           const switchingHost =
-            (section === 'host' || section === 'agent') &&
+            (section === 'host' || section === 'agent' || section === 'icewarp-host') &&
             Boolean(shown && hostId && shown !== hostId);
           if (switchingHost) {
             this.hostSwitching.set(true);
@@ -639,7 +683,11 @@ export class HomePage {
           const ticks = ms <= 0 ? of(0) : timer(0, ms);
           return ticks.pipe(
             switchMap((_tick, index) => {
-              const req = this.dashboardRequest(hostId || undefined, range);
+              const req = this.dashboardRequest(
+                hostId || undefined,
+                range,
+                section === 'icewarp-host' ? 'icewarp' : undefined,
+              );
               if (switchingHost && index === 0) {
                 return timer(180).pipe(switchMap(() => req));
               }
@@ -759,9 +807,25 @@ export class HomePage {
       }));
   }
 
+  protected icewarpPort(name: string): string {
+    const port = name.split('-').pop() ?? name;
+    const labels: Record<string, string> = {
+      '25': 'SMTP 25',
+      '587': 'Submission 587',
+      '143': 'IMAP 143',
+      '993': 'IMAPS 993',
+      '443': 'HTTPS 443',
+    };
+    return labels[port] || name;
+  }
+
   protected askText(topic: string): string {
-    const host = this.hostTitle();
     const range = this.rangeText();
+    if (this.section() === 'icewarp-host') {
+      const name = this.icewarpTitle();
+      return `analiza ${topic} de IceWarp ${name} en ${range}`;
+    }
+    const host = this.hostTitle();
     const where = host !== 'Sin hosts' ? ` del host ${host}` : '';
     return `analiza ${topic}${where} en ${range}`;
   }
@@ -774,7 +838,11 @@ export class HomePage {
   }
 
   protected reload(): void {
-    this.dashboardRequest(this.agentControl.value || undefined, this.rangeControl.value).subscribe();
+    this.dashboardRequest(
+      this.agentControl.value || undefined,
+      this.rangeControl.value,
+      this.section() === 'icewarp-host' ? 'icewarp' : undefined,
+    ).subscribe();
   }
 
   protected toggleKiosk(): void {
@@ -790,6 +858,10 @@ export class HomePage {
     const agent = path.match(/^\/agentes\/([^/]+)$/);
     if (agent?.[1]) {
       return decodeURIComponent(agent[1]);
+    }
+    const icewarp = path.match(/^\/icewarp\/([^/]+)$/);
+    if (icewarp?.[1]) {
+      return decodeURIComponent(icewarp[1]);
     }
     return null;
   }
@@ -811,6 +883,9 @@ export class HomePage {
     if (path.startsWith('/colas')) {
       return 'queues';
     }
+    if (/^\/icewarp\/[^/]+/.test(path)) {
+      return 'icewarp-host';
+    }
     if (path.startsWith('/icewarp')) {
       return 'icewarp';
     }
@@ -823,10 +898,13 @@ export class HomePage {
     return 'hosts';
   }
 
-  private dashboardRequest(agentId?: string, range = this.rangeControl.value) {
+  private dashboardRequest(agentId?: string, range = this.rangeControl.value, view?: string) {
     const query = new URLSearchParams();
     if (agentId) {
       query.set('host_id', agentId);
+    }
+    if (view) {
+      query.set('view', view);
     }
     const tenantId = this.tenants.slug();
     if (tenantId) {

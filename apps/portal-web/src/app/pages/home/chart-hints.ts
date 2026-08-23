@@ -11,4 +11,8 @@ export const CHART_HINTS = {
   tcpConn: 'Estados TCP. established es trafico activo y listen son puertos a la espera. time_wait o syn altos pueden indicar saturacion, fugas o escaneo.',
   otherConn: 'Sockets UDP y el resto de protocolos. UDP no tiene handshake; un salto brusco suele ser un servicio nuevo o un flood.',
   volume: 'Cada punto es un intervalo con logs de la tabla. Pulse uno para filtrarlos. No hay puntos vacios.',
+  icewarpSessions: 'Sesiones servidor actuales por servicio IceWarp (SMTP, IMAP, GroupWare, etc.). Un salto sostenido suele ser clientes o un pico de correo.',
+  icewarpMemory: 'Working set de cada servicio IceWarp. Si un servicio crece sin parar, revise fugas o colas internas.',
+  icewarpSmtp: 'Incremento de mensajes SMTP en el rango: recibidos, enviados y fallidos. Son contadores del MIB, no el acumulado desde el arranque.',
+  icewarpDefense: 'Rechazos del SMTP: virus, spam, DNSBL, content filter y tarpit. Sirven para ver si el filtro esta trabajando o si hay un ataque.',
 };

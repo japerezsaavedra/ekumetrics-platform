@@ -37,6 +37,43 @@ export type DashboardDatabase = {
 
 export type DashboardTarget = DashboardDatabase;
 
+export type DashboardIcewarpService = {
+  name: string;
+  running: boolean;
+  uptimeSeconds: number | null;
+  sessions: number | null;
+  sessionsPeak: number | null;
+  workingSetBytes: number | null;
+};
+
+export type DashboardIcewarpProbe = {
+  name: string;
+  endpoint: string;
+  up: boolean;
+  rttSeconds: number | null;
+};
+
+export type DashboardIcewarp = {
+  hostId: string | null;
+  name: string;
+  servicesUp: number;
+  servicesTotal: number;
+  sessions: number | null;
+  smtpIn: number | null;
+  smtpOut: number | null;
+  smtpFailed: number | null;
+  rejected: number | null;
+  services: DashboardIcewarpService[];
+  probes: DashboardIcewarpProbe[];
+  series: {
+    sessions: Array<{ state: string; values: Array<[number, number]> }>;
+    memory: Array<{ state: string; values: Array<[number, number]> }>;
+    smtp: Array<{ state: string; values: Array<[number, number]> }>;
+    defense: Array<{ state: string; values: Array<[number, number]> }>;
+    probesRtt: Array<{ state: string; values: Array<[number, number]> }>;
+  };
+};
+
 @Injectable()
 export class DashboardService {
   constructor(
@@ -45,7 +82,12 @@ export class DashboardService {
     private readonly tenants: TenantsService,
   ) {}
 
-  async getDashboard(agentIdInput?: string, rangeInput?: string, tenantInput?: string) {
+  async getDashboard(
+    agentIdInput?: string,
+    rangeInput?: string,
+    tenantInput?: string,
+    viewInput?: string,
+  ) {
     const window = this.windowFor(rangeInput);
     const tenantSlug = this.sanitize(tenantInput);
     const rawHosts = await this.listHosts(tenantSlug);
@@ -59,10 +101,12 @@ export class DashboardService {
       this.listSap(tenantSlug),
     ]);
     const requested = this.sanitize(agentIdInput);
-    const hostId =
-      (requested && hosts.some((item) => item.id === requested) ? requested : null) ||
-      hosts[0]?.id ||
-      null;
+    const wantIcewarp = this.sanitize(viewInput) === 'icewarp';
+    const hostId = wantIcewarp
+      ? requested || icewarp[0]?.hostId || hosts[0]?.id || null
+      : (requested && hosts.some((item) => item.id === requested) ? requested : null) ||
+        hosts[0]?.id ||
+        null;
     if (!hostId) {
       return {
         hosts,
@@ -72,6 +116,7 @@ export class DashboardService {
         queues,
         icewarp,
         sap,
+        icewarpBoard: wantIcewarp ? this.emptyIcewarp(null) : undefined,
         agents: hosts.map((item) => ({
           agentId: item.id,
           siteId: item.siteId,
@@ -204,6 +249,9 @@ export class DashboardService {
     const ident = identity[0]?.metric ?? {};
     const receive = netSeries.find((row) => row.metric.direction === 'receive')?.values ?? [];
     const transmit = netSeries.find((row) => row.metric.direction === 'transmit')?.values ?? [];
+    const icewarpBoard = wantIcewarp
+      ? await this.loadIcewarpBoard(hostId, window, icewarp)
+      : undefined;
 
     return {
       hosts,
@@ -213,6 +261,7 @@ export class DashboardService {
       queues,
       icewarp,
       sap,
+      icewarpBoard,
       agents: hosts.map((item) => ({
         agentId: item.id,
         siteId: item.siteId,
@@ -591,6 +640,197 @@ export class DashboardService {
         query: `count by (agent_id, site_id) (ekms_agent_module_enabled${this.tenantSelector(tenantSlug, 'module="sap"')} == 1)`,
       },
     ]);
+  }
+
+  private emptyIcewarp(hostId: string | null): DashboardIcewarp {
+    return {
+      hostId,
+      name: '',
+      servicesUp: 0,
+      servicesTotal: 0,
+      sessions: null,
+      smtpIn: null,
+      smtpOut: null,
+      smtpFailed: null,
+      rejected: null,
+      services: [],
+      probes: [],
+      series: { sessions: [], memory: [], smtp: [], defense: [], probesRtt: [] },
+    };
+  }
+
+  private icewarpSvcName(metric: Record<string, string>): string {
+    return (
+      metric.icewarp_svc?.trim() ||
+      metric.service_instance_id?.trim() ||
+      metric.name?.trim() ||
+      'servicio'
+    );
+  }
+
+  private valueBySvc(rows: InstantRow[]): Map<string, number> {
+    const values = new Map<string, number>();
+    for (const row of rows) {
+      if (!Number.isFinite(row.value)) {
+        continue;
+      }
+      values.set(this.icewarpSvcName(row.metric), row.value);
+    }
+    return values;
+  }
+
+  private smtpDelta(metric: string, sel: string, range: string): string {
+    return `clamp_min(sum(delta(${metric}${sel}[${range}])), 0)`;
+  }
+
+  private async loadIcewarpBoard(
+    hostId: string,
+    window: { seconds: number; step: number; rate: string },
+    inventory: DashboardTarget[],
+  ): Promise<DashboardIcewarp> {
+    const sel = `{agent_id="${hostId}"}`;
+    const probeSel = `{agent_id="${hostId}",name=~".+-(25|587|143|993|443)"}`;
+    const range = `${window.seconds}s`;
+    const rate = window.rate;
+    const [
+      running,
+      uptime,
+      sessions,
+      peak,
+      mem,
+      smtpIn,
+      smtpOut,
+      smtpFailed,
+      virus,
+      cf,
+      dnsbl,
+      tarpit,
+      spam,
+      sessionsSeries,
+      memSeries,
+      smtpInSeries,
+      smtpOutSeries,
+      smtpFailedSeries,
+      virusSeries,
+      spamSeries,
+      dnsblSeries,
+      cfSeries,
+      tarpitSeries,
+      probesUp,
+      probesRtt,
+      probesRttSeries,
+    ] = await Promise.all([
+      this.safeInstant(`icewarp_svc_running${sel}`),
+      this.safeInstant(`icewarp_svc_uptime${sel}`),
+      this.safeInstant(`icewarp_svc_sessions${sel}`),
+      this.safeInstant(`icewarp_svc_sessions_peak${sel}`),
+      this.safeInstant(`icewarp_svc_working_set${sel}`),
+      this.safeInstant(this.smtpDelta('icewarp_smtp_in', sel, range)),
+      this.safeInstant(this.smtpDelta('icewarp_smtp_out', sel, range)),
+      this.safeInstant(this.smtpDelta('icewarp_smtp_failed', sel, range)),
+      this.safeInstant(this.smtpDelta('icewarp_smtp_virus', sel, range)),
+      this.safeInstant(this.smtpDelta('icewarp_smtp_cf', sel, range)),
+      this.safeInstant(this.smtpDelta('icewarp_smtp_dnsbl', sel, range)),
+      this.safeInstant(this.smtpDelta('icewarp_smtp_tarpit', sel, range)),
+      this.safeInstant(this.smtpDelta('icewarp_smtp_spam', sel, range)),
+      this.safeRange(`icewarp_svc_sessions${sel}`, window),
+      this.safeRange(`icewarp_svc_working_set${sel}`, window),
+      this.safeRange(this.smtpDelta('icewarp_smtp_in', sel, rate), window),
+      this.safeRange(this.smtpDelta('icewarp_smtp_out', sel, rate), window),
+      this.safeRange(this.smtpDelta('icewarp_smtp_failed', sel, rate), window),
+      this.safeRange(this.smtpDelta('icewarp_smtp_virus', sel, rate), window),
+      this.safeRange(this.smtpDelta('icewarp_smtp_spam', sel, rate), window),
+      this.safeRange(this.smtpDelta('icewarp_smtp_dnsbl', sel, rate), window),
+      this.safeRange(this.smtpDelta('icewarp_smtp_cf', sel, rate), window),
+      this.safeRange(this.smtpDelta('icewarp_smtp_tarpit', sel, rate), window),
+      this.safeInstant(`ekms_probe_up${probeSel}`),
+      this.safeInstant(`ekms_probe_rtt_seconds${probeSel}`),
+      this.safeRange(`ekms_probe_rtt_seconds${probeSel}`, window),
+    ]);
+    const runMap = this.valueBySvc(running);
+    const upMap = this.valueBySvc(uptime);
+    const sessMap = this.valueBySvc(sessions);
+    const peakMap = this.valueBySvc(peak);
+    const memMap = this.valueBySvc(mem);
+    const names = new Set<string>([
+      ...runMap.keys(),
+      ...sessMap.keys(),
+      ...memMap.keys(),
+    ]);
+    const services = [...names]
+      .sort((left, right) => left.localeCompare(right))
+      .map((name) => ({
+        name,
+        running: (runMap.get(name) ?? 0) >= 1,
+        uptimeSeconds: upMap.get(name) ?? null,
+        sessions: sessMap.get(name) ?? null,
+        sessionsPeak: peakMap.get(name) ?? null,
+        workingSetBytes: memMap.get(name) ?? null,
+      }));
+    const rttMap = new Map(
+      probesRtt
+        .filter((row) => Number.isFinite(row.value))
+        .map((row) => [row.metric.name || row.metric.endpoint || 'probe', row.value]),
+    );
+    const probes = probesUp.map((row) => {
+      const name = row.metric.name || row.metric.endpoint || 'probe';
+      return {
+        name,
+        endpoint: row.metric.endpoint || '',
+        up: Number.isFinite(row.value) && row.value >= 1,
+        rttSeconds: rttMap.get(name) ?? null,
+      };
+    });
+    const first = (rows: InstantRow[]) => this.telemetry.first(rows);
+    const smtpInValue = first(smtpIn);
+    const smtpOutValue = first(smtpOut);
+    const smtpFailedValue = first(smtpFailed);
+    const rejectedParts = [smtpFailed, virus, cf, dnsbl, tarpit, spam].map((rows) => first(rows));
+    const rejected = rejectedParts.every((value) => value === null)
+      ? null
+      : rejectedParts.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+    const named = (
+      rows: Array<{ metric: Record<string, string>; values: Array<[number, number]> }>,
+      label: (metric: Record<string, string>) => string,
+    ) => this.named(rows, label);
+    const inventoryName =
+      inventory.find((item) => item.hostId === hostId)?.name || hostId;
+    return {
+      hostId,
+      name: inventoryName,
+      servicesUp: services.filter((item) => item.running).length,
+      servicesTotal: services.length,
+      sessions:
+        sessMap.size === 0
+          ? null
+          : [...sessMap.values()].reduce((sum, value) => sum + value, 0),
+      smtpIn: smtpInValue,
+      smtpOut: smtpOutValue,
+      smtpFailed: smtpFailedValue,
+      rejected,
+      services,
+      probes,
+      series: {
+        sessions: named(sessionsSeries, (metric) => this.icewarpSvcName(metric)),
+        memory: named(memSeries, (metric) => this.icewarpSvcName(metric)),
+        smtp: [
+          ...named(smtpInSeries, () => 'recibidos'),
+          ...named(smtpOutSeries, () => 'enviados'),
+          ...named(smtpFailedSeries, () => 'fallidos'),
+        ],
+        defense: [
+          ...named(virusSeries, () => 'virus'),
+          ...named(spamSeries, () => 'spam'),
+          ...named(dnsblSeries, () => 'DNSBL'),
+          ...named(cfSeries, () => 'content filter'),
+          ...named(tarpitSeries, () => 'tarpit'),
+        ],
+        probesRtt: named(
+          probesRttSeries,
+          (metric) => metric.name || metric.endpoint || 'probe',
+        ),
+      },
+    };
   }
 
   private async listIcewarp(tenantSlug = ''): Promise<DashboardTarget[]> {

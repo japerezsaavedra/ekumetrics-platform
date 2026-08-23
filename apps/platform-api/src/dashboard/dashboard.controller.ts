@@ -15,7 +15,8 @@ export class DashboardController {
     @Query('agent_id') agentId?: string,
     @Query('range') range?: string,
     @Query('tenant_id') tenantId?: string,
+    @Query('view') view?: string,
   ) {
-    return this.dashboard.getDashboard(hostId || agentId, range, actingTenant(user, tenantId));
+    return this.dashboard.getDashboard(hostId || agentId, range, actingTenant(user, tenantId), view);
   }
 }

@@ -57,6 +57,43 @@ export type DashboardDatabase = {
   up: boolean;
 };
 
+export type IcewarpService = {
+  name: string;
+  running: boolean;
+  uptimeSeconds: number | null;
+  sessions: number | null;
+  sessionsPeak: number | null;
+  workingSetBytes: number | null;
+};
+
+export type IcewarpProbe = {
+  name: string;
+  endpoint: string;
+  up: boolean;
+  rttSeconds: number | null;
+};
+
+export type IcewarpBoard = {
+  hostId: string | null;
+  name: string;
+  servicesUp: number;
+  servicesTotal: number;
+  sessions: number | null;
+  smtpIn: number | null;
+  smtpOut: number | null;
+  smtpFailed: number | null;
+  rejected: number | null;
+  services: IcewarpService[];
+  probes: IcewarpProbe[];
+  series: {
+    sessions: NamedSeries[];
+    memory: NamedSeries[];
+    smtp: NamedSeries[];
+    defense: NamedSeries[];
+    probesRtt: NamedSeries[];
+  };
+};
+
 export type DashboardResponse = {
   hosts: DashboardHostOption[];
   nics?: DashboardNic[];
@@ -64,6 +101,7 @@ export type DashboardResponse = {
   networkDevices?: DashboardDatabase[];
   queues?: DashboardDatabase[];
   icewarp?: DashboardDatabase[];
+  icewarpBoard?: IcewarpBoard | null;
   sap?: DashboardDatabase[];
   agents: Array<{ agentId: string; tenantId: string | null; siteId: string | null }>;
   agentId: string | null;

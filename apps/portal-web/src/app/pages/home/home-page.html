@@ -239,7 +239,7 @@
       } @else {
         <div class="home__inventory">
           @for (item of icewarp(); track dbKey(item)) {
-            <a class="home__tile" [routerLink]="['/hosts', item.hostId]">
+            <a class="home__tile" [routerLink]="['/icewarp', item.hostId]">
               <header>
                 <span class="home__util-title">
                   <mat-icon aria-hidden="true">mail</mat-icon>
@@ -261,6 +261,168 @@
           }
         </div>
       }
+    } @else if (section() === 'icewarp-host') {
+      <div class="home__stage" [class.is-away]="hostSwitching()">
+        <div class="home__hostbar">
+          <p class="home__crumb">
+            <a routerLink="/icewarp">IceWarp</a>
+            <span>{{ icewarpTitle() }}</span>
+          </p>
+          <div class="home__hostbar-meta">
+            <span>
+              <b>{{ icewarpBoard()?.hostId || 'sin datos' }}</b>
+              agente
+            </span>
+            <span>
+              <b>{{ icewarpBoard()?.servicesUp ?? 0 }}/{{ icewarpBoard()?.servicesTotal ?? 0 }}</b>
+              servicios
+            </span>
+          </div>
+        </div>
+        @if (!icewarpBoard()) {
+          <eku-loading-skeleton label="Cargando IceWarp" [bars]="5" />
+        } @else if (icewarpBoard()?.servicesTotal === 0) {
+          <eku-empty-state
+            title="IceWarp"
+            message="No hay series IceWarp para este agente. Active icewarp en el YAML (SNMP 1161) y compruebe que Prometheus reciba icewarp_svc_running."
+          />
+        } @else if (icewarpBoard(); as mail) {
+          <div class="home__kpis home__kpis--four">
+            <article class="home__util" [class]="mail.servicesUp > 0 ? 'is-ok' : 'is-crit'">
+              <header>
+                <span class="home__util-title">
+                  <mat-icon aria-hidden="true">mail</mat-icon>
+                  Servicios
+                </span>
+                <span class="home__chip">{{ mail.servicesUp > 0 ? 'Activo' : 'Sin señal' }}</span>
+              </header>
+              <div class="home__cpu-hero">
+                <strong>{{ mail.servicesUp }}/{{ mail.servicesTotal }}</strong>
+              </div>
+            </article>
+            <article class="home__util">
+              <header>
+                <span class="home__util-title">
+                  <mat-icon aria-hidden="true">groups</mat-icon>
+                  Sesiones
+                </span>
+              </header>
+              <div class="home__cpu-hero">
+                <strong>{{ formatNumber(mail.sessions) }}</strong>
+              </div>
+            </article>
+            <article class="home__util">
+              <header>
+                <span class="home__util-title">
+                  <mat-icon aria-hidden="true">swap_vert</mat-icon>
+                  Correo
+                </span>
+              </header>
+              <div class="home__tile-metrics">
+                <span>
+                  <b>{{ formatNumber(mail.smtpIn) }}</b>
+                  recibidos
+                </span>
+                <span>
+                  <b>{{ formatNumber(mail.smtpOut) }}</b>
+                  enviados
+                </span>
+              </div>
+            </article>
+            <article class="home__util" [class]="(mail.rejected ?? 0) > 0 ? 'is-warn' : 'is-ok'">
+              <header>
+                <span class="home__util-title">
+                  <mat-icon aria-hidden="true">shield</mat-icon>
+                  Rechazos
+                </span>
+                <span class="home__chip">{{ (mail.rejected ?? 0) > 0 ? 'Hay filtro' : 'Sin rechazos' }}</span>
+              </header>
+              <div class="home__cpu-hero">
+                <strong>{{ formatNumber(mail.rejected) }}</strong>
+              </div>
+            </article>
+          </div>
+          @if (mail.probes.length > 0) {
+            <div class="home__kpis home__kpis--icewarp-ports">
+              @for (probe of mail.probes; track probe.name) {
+                <article class="home__util" [class]="probe.up ? 'is-ok' : 'is-crit'">
+                  <header>
+                    <span class="home__util-title">{{ icewarpPort(probe.name) }}</span>
+                    <span class="home__chip">{{ probe.up ? 'Abierto' : 'Cerrado' }}</span>
+                  </header>
+                  <div class="home__tile-metrics">
+                    <span>
+                      <b>{{ probe.up ? formatNumber(probe.rttSeconds, 3) + ' s' : '—' }}</b>
+                      RTT
+                    </span>
+                    <span>
+                      <b>{{ probe.endpoint || 'tcp' }}</b>
+                      destino
+                    </span>
+                  </div>
+                </article>
+              }
+            </div>
+          }
+          <div class="home__grid">
+            <article class="home__panel home__span">
+              <h3>Servicios</h3>
+              <table class="home__table">
+                <thead>
+                  <tr>
+                    <th>Servicio</th>
+                    <th>Estado</th>
+                    <th>Uptime</th>
+                    <th>Sesiones</th>
+                    <th>Pico</th>
+                    <th>Memoria</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (svc of mail.services; track svc.name) {
+                    <tr>
+                      <td>{{ svc.name }}</td>
+                      <td [class]="svc.running ? 'is-ok' : 'is-crit'">{{ svc.running ? 'Activo' : 'Parado' }}</td>
+                      <td>{{ formatUptime(svc.uptimeSeconds) }}</td>
+                      <td>{{ formatNumber(svc.sessions) }}</td>
+                      <td>{{ formatNumber(svc.sessionsPeak) }}</td>
+                      <td>{{ formatSize(svc.workingSetBytes) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </article>
+            <article class="home__chart">
+              <h3>
+                Sesiones por servicio
+                <app-home-chart-ask [hint]="hints.icewarpSessions" [question]="askText('sesiones IceWarp')" />
+              </h3>
+              <eku-chart [option]="icewarpSessionChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
+            </article>
+            <article class="home__chart">
+              <h3>
+                Memoria por servicio
+                <app-home-chart-ask [hint]="hints.icewarpMemory" [question]="askText('memoria IceWarp')" />
+              </h3>
+              <eku-chart [option]="icewarpMemoryChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
+            </article>
+            <article class="home__chart">
+              <h3>
+                Correo SMTP
+                <app-home-chart-ask [hint]="hints.icewarpSmtp" [question]="askText('correo SMTP IceWarp')" />
+              </h3>
+              <eku-chart [option]="icewarpSmtpChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
+            </article>
+            <article class="home__chart">
+              <h3>
+                Defensa SMTP
+                <app-home-chart-ask [hint]="hints.icewarpDefense" [question]="askText('defensa SMTP IceWarp')" />
+              </h3>
+              <eku-chart [option]="icewarpDefenseChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
+            </article>
+          </div>
+        }
+      </div>
     } @else if (section() === 'sap') {
       @if (sap().length === 0) {
         <eku-empty-state

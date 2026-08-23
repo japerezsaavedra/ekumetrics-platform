@@ -672,6 +672,10 @@
   margin-top: var(--eku-space-4);
 }
 
+.home__kpis--icewarp-ports {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .home__kpi {
   display: flex;
   flex-direction: column;
@@ -1114,6 +1118,7 @@
 
 @media (max-width: 71.99rem) {
   .home__kpis--agent,
+  .home__kpis--icewarp-ports,
   .home__kpis--four,
   .home__modules--grid,
   .home__facts {
@@ -1133,6 +1138,7 @@
   .home__utils,
   .home__kpis,
   .home__kpis--agent,
+  .home__kpis--icewarp-ports,
   .home__kpis--four,
   .home__modules--grid,
   .home__facts,
