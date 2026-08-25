@@ -659,6 +659,22 @@ export class DashboardService {
     };
   }
 
+  // IceWarp publica svcUpTime como TimeTicks (centesimas de segundo).
+  private icewarpUptimeSeconds(raw: number | null | undefined): number | null {
+    if (raw == null || !Number.isFinite(raw)) {
+      return null;
+    }
+    return raw / 100;
+  }
+
+  // IceWarp 14.x publica VSZ en INTEGER con signo. Si pasa de 2 GiB, llega negativo.
+  private icewarpWorkingSetBytes(raw: number | null | undefined, running = true): number | null {
+    if (!running || raw == null || !Number.isFinite(raw)) {
+      return null;
+    }
+    return raw < 0 ? raw + 4_294_967_296 : raw;
+  }
+
   private icewarpSvcName(metric: Record<string, string>): string {
     return (
       metric.icewarp_svc?.trim() ||
@@ -759,14 +775,17 @@ export class DashboardService {
     ]);
     const services = [...names]
       .sort((left, right) => left.localeCompare(right))
-      .map((name) => ({
-        name,
-        running: (runMap.get(name) ?? 0) >= 1,
-        uptimeSeconds: upMap.get(name) ?? null,
-        sessions: sessMap.get(name) ?? null,
-        sessionsPeak: peakMap.get(name) ?? null,
-        workingSetBytes: memMap.get(name) ?? null,
-      }));
+      .map((name) => {
+        const running = (runMap.get(name) ?? 0) >= 1;
+        return {
+          name,
+          running,
+          uptimeSeconds: this.icewarpUptimeSeconds(upMap.get(name)),
+          sessions: sessMap.get(name) ?? null,
+          sessionsPeak: peakMap.get(name) ?? null,
+          workingSetBytes: this.icewarpWorkingSetBytes(memMap.get(name), running),
+        };
+      });
     const rttMap = new Map(
       probesRtt
         .filter((row) => Number.isFinite(row.value))
@@ -812,7 +831,20 @@ export class DashboardService {
       probes,
       series: {
         sessions: named(sessionsSeries, (metric) => this.icewarpSvcName(metric)),
-        memory: named(memSeries, (metric) => this.icewarpSvcName(metric)),
+        memory: named(
+          memSeries
+            .filter((row) => (runMap.get(this.icewarpSvcName(row.metric)) ?? 0) >= 1)
+            .map((row) => ({
+              metric: row.metric,
+              values: row.values
+                .map(([time, value]) => {
+                  const bytes = this.icewarpWorkingSetBytes(value, true);
+                  return bytes == null ? null : ([time, bytes] as [number, number]);
+                })
+                .filter((point): point is [number, number] => point != null),
+            })),
+          (metric) => this.icewarpSvcName(metric),
+        ),
         smtp: [
           ...named(smtpInSeries, () => 'recibidos'),
           ...named(smtpOutSeries, () => 'enviados'),

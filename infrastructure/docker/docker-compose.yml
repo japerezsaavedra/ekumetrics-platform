@@ -48,6 +48,9 @@ services:
     command: ["-config.file=/etc/loki/local-config.yaml"]
     ports:
       - "${BIND_ADDR:-0.0.0.0}:3100:3100"
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
 
   alertmanager:
     image: prom/alertmanager:v0.28.1
@@ -244,3 +247,4 @@ volumes:
   prometheus-data:
   grafana-data:
   ollama-data:
+  loki-data:

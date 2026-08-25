@@ -762,6 +762,21 @@
   font-weight: 600;
 }
 
+.home__th-help {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.2rem;
+  color: var(--eku-text-secondary);
+  cursor: help;
+  vertical-align: middle;
+}
+
+.home__th-help .mat-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  font-size: 0.95rem;
+}
+
 .home__table td:nth-child(n + 4) {
   font-variant-numeric: tabular-nums;
 }

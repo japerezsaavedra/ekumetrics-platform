@@ -25,6 +25,7 @@ processors:
           - set(attributes["agent_id"], resource.attributes["agent.id"]) where resource.attributes["agent.id"] != nil
           - set(attributes["tenant_id"], resource.attributes["tenant.id"]) where resource.attributes["tenant.id"] != nil
           - set(attributes["site_id"], resource.attributes["host.site"]) where resource.attributes["host.site"] != nil
+          - set(attributes["icewarp_svc"], resource.attributes["icewarp_svc"]) where resource.attributes["icewarp_svc"] != nil
           - set(attributes["process"], resource.attributes["process.executable.name"]) where resource.attributes["process.executable.name"] != nil
           - set(attributes["process"], resource.attributes["process.command"]) where attributes["process"] == nil and resource.attributes["process.command"] != nil
           - set(attributes["pid"], resource.attributes["process.pid"]) where resource.attributes["process.pid"] != nil

@@ -293,6 +293,7 @@
                 <span class="home__util-title">
                   <mat-icon aria-hidden="true">mail</mat-icon>
                   Servicios
+                  <app-home-chart-ask [hint]="hints.icewarpKpiServices" [question]="askText('servicios IceWarp')" />
                 </span>
                 <span class="home__chip">{{ mail.servicesUp > 0 ? 'Activo' : 'Sin señal' }}</span>
               </header>
@@ -305,6 +306,7 @@
                 <span class="home__util-title">
                   <mat-icon aria-hidden="true">groups</mat-icon>
                   Sesiones
+                  <app-home-chart-ask [hint]="hints.icewarpKpiSessions" [question]="askText('sesiones IceWarp')" />
                 </span>
               </header>
               <div class="home__cpu-hero">
@@ -316,6 +318,7 @@
                 <span class="home__util-title">
                   <mat-icon aria-hidden="true">swap_vert</mat-icon>
                   Correo
+                  <app-home-chart-ask [hint]="hints.icewarpKpiMail" [question]="askText('correo SMTP IceWarp')" />
                 </span>
               </header>
               <div class="home__tile-metrics">
@@ -334,6 +337,7 @@
                 <span class="home__util-title">
                   <mat-icon aria-hidden="true">shield</mat-icon>
                   Rechazos
+                  <app-home-chart-ask [hint]="hints.icewarpKpiRejected" [question]="askText('rechazos SMTP IceWarp')" />
                 </span>
                 <span class="home__chip">{{ (mail.rejected ?? 0) > 0 ? 'Hay filtro' : 'Sin rechazos' }}</span>
               </header>
@@ -347,7 +351,10 @@
               @for (probe of mail.probes; track probe.name) {
                 <article class="home__util" [class]="probe.up ? 'is-ok' : 'is-crit'">
                   <header>
-                    <span class="home__util-title">{{ icewarpPort(probe.name) }}</span>
+                    <span class="home__util-title">
+                      {{ icewarpPort(probe.name) }}
+                      <app-home-chart-ask [hint]="hints.icewarpKpiPorts" [question]="askText('puertos IceWarp')" />
+                    </span>
                     <span class="home__chip">{{ probe.up ? 'Abierto' : 'Cerrado' }}</span>
                   </header>
                   <div class="home__tile-metrics">
@@ -366,16 +373,39 @@
           }
           <div class="home__grid">
             <article class="home__panel home__span">
-              <h3>Servicios</h3>
+              <h3>
+                Servicios
+                <app-home-chart-ask [hint]="hints.icewarpTable" [question]="askText('tabla de servicios IceWarp')" />
+              </h3>
               <table class="home__table">
                 <thead>
                   <tr>
                     <th>Servicio</th>
                     <th>Estado</th>
-                    <th>Uptime</th>
-                    <th>Sesiones</th>
-                    <th>Pico</th>
-                    <th>Memoria</th>
+                    <th>
+                      Uptime
+                      <span class="home__th-help" [matTooltip]="hints.icewarpColUptime" matTooltipClass="eku-hint-tooltip">
+                        <mat-icon>help_outline</mat-icon>
+                      </span>
+                    </th>
+                    <th>
+                      Sesiones
+                      <span class="home__th-help" [matTooltip]="hints.icewarpColSessions" matTooltipClass="eku-hint-tooltip">
+                        <mat-icon>help_outline</mat-icon>
+                      </span>
+                    </th>
+                    <th>
+                      Pico
+                      <span class="home__th-help" [matTooltip]="hints.icewarpColPeak" matTooltipClass="eku-hint-tooltip">
+                        <mat-icon>help_outline</mat-icon>
+                      </span>
+                    </th>
+                    <th>
+                      Virtual
+                      <span class="home__th-help" [matTooltip]="hints.icewarpColVirtual" matTooltipClass="eku-hint-tooltip">
+                        <mat-icon>help_outline</mat-icon>
+                      </span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -386,7 +416,7 @@
                       <td>{{ formatUptime(svc.uptimeSeconds) }}</td>
                       <td>{{ formatNumber(svc.sessions) }}</td>
                       <td>{{ formatNumber(svc.sessionsPeak) }}</td>
-                      <td>{{ formatSize(svc.workingSetBytes) }}</td>
+                      <td>{{ svc.running ? formatSize(svc.workingSetBytes) : '—' }}</td>
                     </tr>
                   }
                 </tbody>
@@ -401,8 +431,8 @@
             </article>
             <article class="home__chart">
               <h3>
-                Memoria por servicio
-                <app-home-chart-ask [hint]="hints.icewarpMemory" [question]="askText('memoria IceWarp')" />
+                Memoria virtual por servicio
+                <app-home-chart-ask [hint]="hints.icewarpMemory" [question]="askText('memoria virtual IceWarp')" />
               </h3>
               <eku-chart [option]="icewarpMemoryChart()" [rangeMs]="chartRangeMs()" [stripKey]="chartStripKey()" />
             </article>

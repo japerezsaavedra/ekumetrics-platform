@@ -9,6 +9,7 @@ agent:
   mode: __MODE__
   metricsAddr: ":9090"
   license: ""
+  interval: 5s
 
 export:
   otlp:
@@ -66,7 +67,7 @@ modules:
       enabled: false
   probes:
     enabled: false
-    interval: 30s
+    interval: 5s
     targets: []
 
 snmp:

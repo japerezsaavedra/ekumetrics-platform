@@ -135,7 +135,7 @@
         "overrides": [
           { "matcher": { "id": "byName", "options": "running" }, "properties": [{ "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Parado", "color": "red" }, "1": { "text": "Activo", "color": "green" } } }] }] },
           { "matcher": { "id": "byName", "options": "uptime" }, "properties": [{ "id": "unit", "value": "s" }] },
-          { "matcher": { "id": "byName", "options": "memoria" }, "properties": [{ "id": "unit", "value": "bytes" }] }
+          { "matcher": { "id": "byName", "options": "virtual" }, "properties": [{ "id": "unit", "value": "bytes" }] }
         ]
       },
       "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
@@ -151,17 +151,17 @@
               "Value #B": "uptime",
               "Value #C": "sesiones",
               "Value #D": "pico",
-              "Value #E": "memoria"
+              "Value #E": "virtual"
             }
           }
         }
       ],
       "targets": [
         { "refId": "A", "expr": "icewarp_svc_running{agent_id=\"$agent_id\"}", "format": "table", "instant": true },
-        { "refId": "B", "expr": "icewarp_svc_uptime{agent_id=\"$agent_id\"}", "format": "table", "instant": true },
+        { "refId": "B", "expr": "icewarp_svc_uptime{agent_id=\"$agent_id\"} / 100", "format": "table", "instant": true },
         { "refId": "C", "expr": "icewarp_svc_sessions{agent_id=\"$agent_id\"}", "format": "table", "instant": true },
         { "refId": "D", "expr": "icewarp_svc_sessions_peak{agent_id=\"$agent_id\"}", "format": "table", "instant": true },
-        { "refId": "E", "expr": "icewarp_svc_working_set{agent_id=\"$agent_id\"}", "format": "table", "instant": true }
+        { "refId": "E", "expr": "(icewarp_svc_working_set{agent_id=\"$agent_id\"} + 4294967296 * (icewarp_svc_working_set{agent_id=\"$agent_id\"} < bool 0)) * on(icewarp_svc) group_left() (icewarp_svc_running{agent_id=\"$agent_id\"} == 1)", "format": "table", "instant": true }
       ]
     },
     {
@@ -178,12 +178,12 @@
     {
       "id": 21,
       "type": "timeseries",
-      "title": "Memoria por servicio",
+      "title": "Memoria virtual por servicio",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 10, "spanNulls": true } }, "overrides": [] },
       "targets": [
-        { "refId": "A", "expr": "icewarp_svc_working_set{agent_id=\"$agent_id\"}", "legendFormat": "{{icewarp_svc}}" }
+        { "refId": "A", "expr": "(icewarp_svc_working_set{agent_id=\"$agent_id\"} + 4294967296 * (icewarp_svc_working_set{agent_id=\"$agent_id\"} < bool 0)) * on(icewarp_svc) group_left() (icewarp_svc_running{agent_id=\"$agent_id\"} == 1)", "legendFormat": "{{icewarp_svc}}" }
       ]
     },
     {
