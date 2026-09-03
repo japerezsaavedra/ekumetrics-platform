@@ -1,0 +1,52 @@
+# Tempo monolitico para la instalacion de un solo nodo de Ekumetrics.
+# El backend local es apropiado para desarrollo y despliegues single-node;
+# produccion con HA debe sustituirlo por almacenamiento de objetos administrado.
+stream_over_http_enabled: false
+multitenancy_enabled: false
+
+server:
+  http_listen_port: 3200
+  log_level: info
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+# Tempo 3 ejecuta scheduler/worker de compaction dentro de target=all.
+backend_scheduler:
+  provider:
+    compaction:
+      compaction:
+        block_retention: 720h
+        compacted_block_retention: 1h
+
+backend_worker:
+  compaction:
+    block_retention: 720h
+    compacted_block_retention: 1h
+
+query_frontend:
+  max_query_expression_size_bytes: 8192
+  max_outstanding_per_tenant: 100
+  search:
+    default_result_limit: 20
+    max_result_limit: 100
+    max_duration: 24h
+    default_spans_per_span_set: 3
+    max_spans_per_span_set: 10
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+usage_report:
+  reporting_enabled: false

@@ -1,0 +1,60 @@
+groups:
+  - name: ekumetrics-capacity-alerts
+    interval: 30s
+    rules:
+      - alert: EkumetricsTempoUnavailable
+        expr: up{job="tempo"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          subsystem: traces
+        annotations:
+          summary: "Tempo no está disponible"
+          impact: "Las trazas no pueden consultarse ni usarse como evidencia de investigación."
+          runbook_url: "docs/operations.md#respuesta-a-alertas-slo"
+      - alert: EkumetricsFilesystemCapacityLow
+        expr: |
+          100 * node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint!~"/host/(dev|proc|sys).*"}
+          /
+          node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint!~"/host/(dev|proc|sys).*"} < 15
+        for: 15m
+        labels:
+          severity: warning
+          subsystem: storage
+        annotations:
+          summary: "El filesystem tiene menos de 15 % libre"
+          impact: "Prometheus, Loki, Tempo, NATS o PostgreSQL pueden dejar de persistir datos."
+          runbook_url: "docs/operations.md#respuesta-a-capacidad-y-disco-lleno"
+      - alert: EkumetricsFilesystemCapacityCritical
+        expr: |
+          100 * node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint!~"/host/(dev|proc|sys).*"}
+          /
+          node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint!~"/host/(dev|proc|sys).*"} < 5
+        for: 5m
+        labels:
+          severity: critical
+          subsystem: storage
+        annotations:
+          summary: "El filesystem tiene menos de 5 % libre"
+          impact: "Existe riesgo inmediato de rechazo de ingesta, caída o escrituras incompletas."
+          runbook_url: "docs/operations.md#respuesta-a-capacidad-y-disco-lleno"
+      - alert: EkumetricsEventRetentionFailed
+        expr: increase(ekumetrics_event_retention_failures_total[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          subsystem: postgres
+        annotations:
+          summary: "Falló la retención de eventos en PostgreSQL"
+          impact: "AgentEvent continuará creciendo y puede agotar la capacidad contratada."
+          runbook_url: "docs/operations.md#respuesta-a-capacidad-y-disco-lleno"
+      - alert: EkumetricsEventRetentionStalled
+        expr: time() - ekumetrics_event_retention_last_success_timestamp_seconds > 7200
+        for: 15m
+        labels:
+          severity: warning
+          subsystem: postgres
+        annotations:
+          summary: "La retención de eventos no termina correctamente hace más de dos horas"
+          impact: "La política de 30 días puede no estar aplicándose."
+          runbook_url: "docs/operations.md#respuesta-a-capacidad-y-disco-lleno"
