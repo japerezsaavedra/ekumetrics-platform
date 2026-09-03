@@ -95,7 +95,7 @@ jobs:
 
       - name: Apply manifests
         run: |
-          kubectl apply -k infrastructure/k8s/overlays/lab
+          kubectl apply -k infrastructure/k8s/overlays/saas
 
       - name: Wait for rollout
         run: |

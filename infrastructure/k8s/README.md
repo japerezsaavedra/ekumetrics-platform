@@ -7,7 +7,7 @@ Este directorio contiene los manifiestos de Kubernetes para desplegar ekumetrics
 ## Infraestructura
 
 ### Cluster
-- k3s HA en Hetzner
+- k3s HA en Contabo US-east
 - 3 workers: 6 CPU / ~12Gi RAM cada uno (18 CPU / ~36Gi total)
 - IPs públicas de workers: `13.140.39.245`, `13.140.39.246`, `13.140.39.247`
 - Puertos expuestos: 80, 443 (web), 4317, 4318 (agent mTLS)
