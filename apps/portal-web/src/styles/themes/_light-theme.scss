@@ -16,7 +16,8 @@
   --eku-info: var(--eku-ref-info);
   --eku-unknown: var(--eku-ref-unknown);
   --eku-maintenance: var(--eku-ref-maintenance);
-  --eku-elevation: 0 1px 2px color-mix(in srgb, var(--eku-ref-ink) 4%, transparent),
+  --eku-elevation:
+    0 1px 2px color-mix(in srgb, var(--eku-ref-ink) 4%, transparent),
     0 10px 28px color-mix(in srgb, var(--eku-ref-ink) 6%, transparent);
   --eku-nav-elevation: 0 2px 8px color-mix(in srgb, var(--eku-ref-ink) 14%, transparent);
   --eku-aside-elevation: 2px 0 8px color-mix(in srgb, var(--eku-ref-ink) 8%, transparent);

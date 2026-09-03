@@ -1,0 +1,105 @@
+<section class="identity">
+  <eku-page-header
+    title="Identidad"
+    [subtitle]="
+      'Keycloak autentica a ' +
+      tenantName() +
+      '. Configure MFA, Microsoft Entra ID o Active Directory para este tenant' +
+      (emailDomain() ? ' (@' + emailDomain() + ').' : '.')
+    "
+  >
+    @if (error(); as message) {
+      <eku-error-state [message]="message" />
+    } @else if (saved()) {
+      <p>Keycloak actualizó la federación de este tenant.</p>
+    }
+  </eku-page-header>
+
+  <form class="eku-form identity__form" [formGroup]="form" (ngSubmit)="submit()">
+    <fieldset class="identity__block">
+      <legend>MFA</legend>
+      <label class="identity__toggle">
+        <input type="checkbox" formControlName="mfaRequired" />
+        Exigir TOTP a los usuarios de este tenant
+      </label>
+      <p>
+        El primer ingreso pedirá escanear un QR dentro del portal. Los siguientes usarán el código de 6 dígitos.
+      </p>
+    </fieldset>
+
+    <fieldset class="identity__block">
+      <legend>Microsoft Entra ID</legend>
+      <label class="identity__toggle">
+        <input type="checkbox" formControlName="entraEnabled" />
+        Federar este tenant con Entra ID
+      </label>
+      @if (form.controls.entraEnabled.value) {
+        <label class="eku-field">
+          <span>Directory (tenant) ID</span>
+          <input type="text" formControlName="entraTenantId" autocomplete="off" />
+          <small>{{ fieldInvalid('entraTenantId') ? 'Indique el Tenant ID de Entra.' : '' }}</small>
+        </label>
+        <label class="eku-field">
+          <span>Application (client) ID</span>
+          <input type="text" formControlName="entraClientId" autocomplete="off" />
+          <small>{{ fieldInvalid('entraClientId') ? 'Indique el Client ID.' : '' }}</small>
+        </label>
+        <label class="eku-field">
+          <span>Client secret</span>
+          <input type="password" formControlName="entraClientSecret" autocomplete="new-password" />
+          <small>{{
+            fieldInvalid('entraClientSecret')
+              ? 'Indique el secreto.'
+              : hasEntraSecret()
+                ? 'Deje vacío para conservar el secreto actual.'
+                : ''
+          }}</small>
+        </label>
+      }
+    </fieldset>
+
+    <fieldset class="identity__block">
+      <legend>Active Directory</legend>
+      <label class="identity__toggle">
+        <input type="checkbox" formControlName="adEnabled" />
+        Federar este tenant con Active Directory
+      </label>
+      @if (form.controls.adEnabled.value) {
+        <label class="eku-field">
+          <span>URL LDAP</span>
+          <input
+            type="text"
+            formControlName="adConnectionUrl"
+            placeholder="ldaps://dc.cliente.local:636"
+          />
+          <small>{{ fieldInvalid('adConnectionUrl') ? 'Use ldap:// o ldaps://.' : '' }}</small>
+        </label>
+        <label class="eku-field">
+          <span>Bind DN</span>
+          <input type="text" formControlName="adBindDn" placeholder="CN=ekumetrics,OU=svc,DC=cliente,DC=local" />
+          <small>{{ fieldInvalid('adBindDn') ? 'Indique el usuario de enlace.' : '' }}</small>
+        </label>
+        <label class="eku-field">
+          <span>Contraseña de enlace</span>
+          <input type="password" formControlName="adBindPassword" autocomplete="new-password" />
+          <small>{{
+            fieldInvalid('adBindPassword')
+              ? 'Indique la contraseña.'
+              : hasAdBindPassword()
+                ? 'Deje vacío para conservar la contraseña actual.'
+                : ''
+          }}</small>
+        </label>
+        <label class="eku-field">
+          <span>OU de usuarios</span>
+          <input type="text" formControlName="adUsersDn" placeholder="OU=Users,DC=cliente,DC=local" />
+          <small>{{ fieldInvalid('adUsersDn') ? 'Indique la OU de usuarios.' : '' }}</small>
+        </label>
+      }
+    </fieldset>
+
+    <button type="submit" [disabled]="loading()">
+      {{ loading() ? 'Aplicando en Keycloak…' : 'Guardar identidad' }}
+    </button>
+  </form>
+</section>

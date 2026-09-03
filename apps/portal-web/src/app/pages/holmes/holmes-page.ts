@@ -20,11 +20,26 @@ import { EkuErrorStateComponent } from '../../shared/eku/error-state/eku-error-s
 import { EkuLoadingSkeletonComponent } from '../../shared/eku/loading-skeleton/eku-loading-skeleton';
 import { EkuMarkdownComponent } from '../../shared/eku/markdown/eku-markdown';
 import { EkuPageHeaderComponent } from '../../shared/eku/page-header/eku-page-header';
-import { ConversationStore, type ChatMessage, type Conversation } from './conversation-store';
+import {
+  ConversationStore,
+  type ChatEvidence,
+  type ChatMessage,
+  type ConversationSummary,
+  type InvestigationSummary,
+} from './conversation-store';
 import { EXAMPLE_QUESTIONS } from './example-questions';
+import {
+  confidenceLabel,
+  investigationSources,
+  outcomeLabel,
+  sourceStateLabel,
+} from './investigation-view';
 
 type AiAskResponse = {
   analysis: string;
+  conversationId: string;
+  evidence: ChatEvidence[];
+  investigation: InvestigationSummary;
 };
 
 @Component({
@@ -79,46 +94,58 @@ export class HolmesPage {
     });
     const draft = this.route.snapshot.queryParamMap.get('q')?.trim();
     if (draft && draft.length >= 4) {
-      this.startNew();
-      this.askExample(draft);
+      void this.startWithQuestion(draft);
       void this.router.navigate(['/asistente'], { replaceUrl: true });
     }
   }
 
-  protected startNew(): void {
-    this.store.create();
-    this.messages.set([]);
-    this.error.set(null);
-    this.form.reset({ question: '' });
-    this.selected.set(0);
+  protected async startNew(): Promise<void> {
+    if (this.loading()) return;
+    try {
+      await this.store.create();
+      this.messages.set([]);
+      this.error.set(null);
+      this.form.reset({ question: '' });
+      this.selected.set(0);
+    } catch (error) {
+      this.error.set(this.errorMessage(error));
+    }
   }
 
-  protected openConversation(id: string): void {
+  protected async openConversation(id: string): Promise<void> {
     if (this.loading()) {
       return;
     }
-    this.store.select(id);
-    this.messages.set(this.store.active()?.messages ?? []);
-    this.error.set(null);
-    this.selected.set(0);
+    try {
+      const conversation = await this.store.select(id);
+      this.messages.set(conversation.messages);
+      this.error.set(null);
+      this.selected.set(0);
+    } catch (error) {
+      this.error.set(this.errorMessage(error));
+    }
   }
 
-  protected removeConversation(id: string, event: Event): void {
+  protected async removeConversation(id: string, event: Event): Promise<void> {
     event.stopPropagation();
     if (this.loading()) {
       return;
     }
-    this.store.remove(id);
-    this.messages.set(this.store.active()?.messages ?? []);
+    try {
+      await this.store.remove(id);
+      this.messages.set(this.store.active()?.messages ?? []);
+    } catch (error) {
+      this.error.set(this.errorMessage(error));
+    }
   }
 
-  protected questionCount(item: Conversation): number {
-    return item.messages.filter((message) => message.role === 'user').length;
+  protected questionCount(item: ConversationSummary): number {
+    return item.questionCount;
   }
 
   protected askExample(question: string): void {
     this.form.controls.question.setValue(question);
-    this.submit();
+    void this.submit();
   }
 
   protected onQuestionKeydown(event: KeyboardEvent): void {
@@ -126,17 +153,25 @@ export class HolmesPage {
       return;
     }
     event.preventDefault();
-    this.submit();
+    void this.submit();
   }
 
-  protected submit(): void {
+  protected async submit(): Promise<void> {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
     }
     const question = this.form.controls.question.value.trim();
     this.form.controls.question.setValue('');
-    const conversation = this.store.active() ?? this.store.create(this.titleFrom(question));
+    let conversation = this.store.active();
+    if (!conversation) {
+      try {
+        conversation = await this.store.create(this.titleFrom(question));
+      } catch (error) {
+        this.error.set(this.errorMessage(error));
+        return;
+      }
+    }
     const next = [...this.messages(), { role: 'user' as const, text: question }];
     this.messages.set(next);
     this.persist(conversation.id, next, this.titleFrom(question));
@@ -148,30 +183,31 @@ export class HolmesPage {
     this.http
       .post<AiAskResponse>(`${API_BASE_URL}/v1/ai/ask`, {
         question,
-        history: this.messages()
-          .slice(-8)
-          .map((item) => ({ role: item.role, text: item.text })),
+        conversationId: conversation.id,
       })
       .subscribe({
-      next: (value) => {
-        this.stopTimer();
-        const withReply = [
-          ...this.messages(),
-          { role: 'assistant' as const, text: this.replyText(value.analysis) },
-        ];
-        this.messages.set(withReply);
-        this.persist(conversation.id, withReply);
-        this.loading.set(false);
-      },
-      error: (err: { error?: { message?: string | string[] } }) => {
-        this.stopTimer();
-        this.loading.set(false);
-        const raw = err.error?.message;
-        this.error.set(
-          Array.isArray(raw) ? raw.join(' ') : (raw ?? 'No hubo respuesta.'),
-        );
-      },
-    });
+        next: (value) => {
+          this.stopTimer();
+          const withReply = [
+            ...this.messages(),
+            {
+              role: 'assistant' as const,
+              text: this.replyText(value.analysis),
+              evidence: value.evidence,
+              investigation: value.investigation,
+            },
+          ];
+          this.messages.set(withReply);
+          this.persist(conversation.id, withReply);
+          this.loading.set(false);
+        },
+        error: (err: { error?: { message?: string | string[] } }) => {
+          this.stopTimer();
+          this.loading.set(false);
+          const raw = err.error?.message;
+          this.error.set(Array.isArray(raw) ? raw.join(' ') : (raw ?? 'No hubo respuesta.'));
+        },
+      });
   }
 
   protected formatWhen(iso: string): string {
@@ -183,8 +219,48 @@ export class HolmesPage {
     });
   }
 
+  protected evidenceItems(value: ChatEvidence[] | undefined): ChatEvidence[] {
+    return Array.isArray(value) ? value.slice(0, 20) : [];
+  }
+
+  protected sourceLabel(source: ChatEvidence['source']): string {
+    const labels: Record<ChatEvidence['source'], string> = {
+      prometheus: 'Métricas',
+      loki: 'Logs',
+      tempo: 'Trazas',
+      postgresql: 'Eventos',
+      inventory: 'Inventario',
+      knowledge: 'Conocimiento',
+    };
+    return labels[source];
+  }
+
+  protected readonly investigationSources = investigationSources;
+  protected readonly sourceStateLabel = sourceStateLabel;
+  protected readonly outcomeLabel = outcomeLabel;
+  protected readonly confidenceLabel = confidenceLabel;
+
+  protected confidencePercent(value: number): number {
+    return Math.round(Math.min(1, Math.max(0, value)) * 100);
+  }
+
   private persist(id: string, messages: ChatMessage[], title?: string): void {
-    this.store.saveMessages(id, messages, title);
+    this.store.reflectMessages(id, messages, title);
+  }
+
+  private async startWithQuestion(question: string): Promise<void> {
+    await this.startNew();
+    if (!this.store.active()) return;
+    this.form.controls.question.setValue(question);
+    await this.submit();
+  }
+
+  private errorMessage(error: unknown): string {
+    if (!error || typeof error !== 'object' || !('error' in error)) {
+      return 'No fue posible acceder al historial.';
+    }
+    const raw = (error as { error?: { message?: string | string[] } }).error?.message;
+    return Array.isArray(raw) ? raw.join(' ') : (raw ?? 'No fue posible acceder al historial.');
   }
 
   private titleFrom(question: string): string {

@@ -1,9 +1,16 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatSidenav, MatSidenavContainer, MatSidenavContent } from '@angular/material/sidenav';
 import { MatToolbar } from '@angular/material/toolbar';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -28,9 +35,6 @@ import { NAV_ITEMS, navGroupOpenByDefault, type NavItem } from '../nav';
     MatIcon,
     MatIconButton,
     MatTooltip,
-    MatMenu,
-    MatMenuItem,
-    MatMenuTrigger,
     ReactiveFormsModule,
   ],
   templateUrl: './app-shell.html',
@@ -52,9 +56,15 @@ export class AppShell {
   protected readonly kioskOn = this.kiosk.active;
   protected readonly nav = computed(() => {
     const operator = this.tenants.isOperator();
-    return NAV_ITEMS.filter((item) => !item.operatorOnly || operator).map((item) => ({
+    const role = this.auth.role();
+    return NAV_ITEMS.filter(
+      (item) => (!item.operatorOnly || operator) && (!item.roles || item.roles.includes(role)),
+    ).map((item) => ({
       ...item,
-      children: item.children?.filter((child) => !child.operatorOnly || operator),
+      children: item.children?.filter(
+        (child) =>
+          (!child.operatorOnly || operator) && (!child.roles || child.roles.includes(role)),
+      ),
     }));
   });
   protected readonly openGroups = signal<Record<string, boolean>>(
@@ -77,11 +87,16 @@ export class AppShell {
   }
 
   protected logout(): void {
-    this.auth.logout();
+    void this.auth.logout();
   }
 
   protected isLogin(): boolean {
-    return this.currentUrl().startsWith('/login');
+    const url = this.currentUrl();
+    return (
+      url.startsWith('/login') ||
+      url.startsWith('/enrolar-mfa') ||
+      url.startsWith('/kiosk/activar')
+    );
   }
 
   protected currentUrl(): string {
@@ -123,7 +138,9 @@ export class AppShell {
 
   protected isGroupActive(item: NavItem): boolean {
     const url = this.currentUrl();
-    return (item.children ?? []).some((child) => url === child.path || url.startsWith(`${child.path}/`));
+    return (item.children ?? []).some(
+      (child) => url === child.path || url.startsWith(`${child.path}/`),
+    );
   }
 
   private openActiveGroup(url: string): void {
@@ -146,7 +163,8 @@ export class AppShell {
       url.startsWith('/bases-de-datos') ||
       url.startsWith('/colas') ||
       url.startsWith('/icewarp') ||
-      url.startsWith('/sap')
+      url.startsWith('/sap') ||
+      url.startsWith('/kiosk/')
     );
   }
 }

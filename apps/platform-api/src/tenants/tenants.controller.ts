@@ -1,8 +1,20 @@
-import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { actingTenant } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user';
 import type { AuthUser } from '../auth/auth.types';
 import { TenantsService } from './tenants.service';
+import { Roles } from '../auth/roles';
+import { AuditAction } from '../auth/audit-action';
 
 type TenantBody = {
   name?: string;
@@ -26,6 +38,7 @@ type AgentBody = {
 };
 
 @Controller('v1/tenants')
+@Roles('operator', 'admin', 'viewer')
 export class TenantsController {
   constructor(private readonly tenants: TenantsService) {}
 
@@ -40,6 +53,8 @@ export class TenantsController {
   }
 
   @Post()
+  @Roles('operator')
+  @AuditAction('tenant.created', 'tenant')
   create(
     @CurrentUser() user: AuthUser,
     @Body() body: TenantBody,
@@ -59,6 +74,8 @@ export class TenantsController {
   }
 
   @Patch(':slug')
+  @Roles('operator')
+  @AuditAction('tenant.updated', 'tenant')
   update(
     @CurrentUser() user: AuthUser,
     @Param('slug') slug: string,
@@ -66,17 +83,27 @@ export class TenantsController {
     @Query('as') asSlug?: string,
     @Headers('x-eku-tenant') headerSlug?: string,
   ) {
-    return this.tenants.updateTenant(actingTenant(user, asSlug || headerSlug), slug, body.name, body.emailDomain);
+    return this.tenants.updateTenant(
+      actingTenant(user, asSlug || headerSlug),
+      slug,
+      body.name,
+      body.emailDomain,
+    );
   }
 
   @Delete(':slug')
+  @Roles('operator')
+  @AuditAction('tenant.deleted', 'tenant')
   remove(
     @CurrentUser() user: AuthUser,
     @Param('slug') slug: string,
     @Query('as') asSlug?: string,
     @Headers('x-eku-tenant') headerSlug?: string,
   ) {
-    return this.tenants.removeTenant(actingTenant(user, asSlug || headerSlug), slug);
+    return this.tenants.removeTenant(
+      actingTenant(user, asSlug || headerSlug),
+      slug,
+    );
   }
 
   @Get(':slug/sites')
@@ -86,10 +113,15 @@ export class TenantsController {
     @Query('as') asSlug?: string,
     @Headers('x-eku-tenant') headerSlug?: string,
   ) {
-    return this.tenants.listSites(actingTenant(user, asSlug || headerSlug), slug);
+    return this.tenants.listSites(
+      actingTenant(user, asSlug || headerSlug),
+      slug,
+    );
   }
 
   @Post(':slug/sites')
+  @Roles('operator', 'admin')
+  @AuditAction('tenant.site.created', 'site')
   addSite(
     @CurrentUser() user: AuthUser,
     @Param('slug') slug: string,
@@ -97,10 +129,17 @@ export class TenantsController {
     @Query('as') asSlug?: string,
     @Headers('x-eku-tenant') headerSlug?: string,
   ) {
-    return this.tenants.addSite(actingTenant(user, asSlug || headerSlug), slug, body.name, body.slug);
+    return this.tenants.addSite(
+      actingTenant(user, asSlug || headerSlug),
+      slug,
+      body.name,
+      body.slug,
+    );
   }
 
   @Patch(':slug/sites/:siteId')
+  @Roles('operator', 'admin')
+  @AuditAction('tenant.site.updated', 'site')
   updateSite(
     @CurrentUser() user: AuthUser,
     @Param('slug') slug: string,
@@ -109,10 +148,18 @@ export class TenantsController {
     @Query('as') asSlug?: string,
     @Headers('x-eku-tenant') headerSlug?: string,
   ) {
-    return this.tenants.updateSite(actingTenant(user, asSlug || headerSlug), slug, siteId, body.name, body.slug);
+    return this.tenants.updateSite(
+      actingTenant(user, asSlug || headerSlug),
+      slug,
+      siteId,
+      body.name,
+      body.slug,
+    );
   }
 
   @Delete(':slug/sites/:siteId')
+  @Roles('operator', 'admin')
+  @AuditAction('tenant.site.deleted', 'site')
   removeSite(
     @CurrentUser() user: AuthUser,
     @Param('slug') slug: string,
@@ -120,7 +167,11 @@ export class TenantsController {
     @Query('as') asSlug?: string,
     @Headers('x-eku-tenant') headerSlug?: string,
   ) {
-    return this.tenants.removeSite(actingTenant(user, asSlug || headerSlug), slug, siteId);
+    return this.tenants.removeSite(
+      actingTenant(user, asSlug || headerSlug),
+      slug,
+      siteId,
+    );
   }
 
   @Get(':slug/agents')
@@ -130,10 +181,15 @@ export class TenantsController {
     @Query('as') asSlug?: string,
     @Headers('x-eku-tenant') headerSlug?: string,
   ) {
-    return this.tenants.listAgents(actingTenant(user, asSlug || headerSlug), slug);
+    return this.tenants.listAgents(
+      actingTenant(user, asSlug || headerSlug),
+      slug,
+    );
   }
 
   @Post(':slug/agents')
+  @Roles('operator', 'admin')
+  @AuditAction('tenant.agent.created', 'agent')
   addAgent(
     @CurrentUser() user: AuthUser,
     @Param('slug') slug: string,
@@ -151,6 +207,8 @@ export class TenantsController {
   }
 
   @Patch(':slug/agents/:id')
+  @Roles('operator', 'admin')
+  @AuditAction('tenant.agent.updated', 'agent')
   updateAgent(
     @CurrentUser() user: AuthUser,
     @Param('slug') slug: string,
@@ -159,10 +217,18 @@ export class TenantsController {
     @Query('as') asSlug?: string,
     @Headers('x-eku-tenant') headerSlug?: string,
   ) {
-    return this.tenants.updateAgent(actingTenant(user, asSlug || headerSlug), slug, id, body.siteId, body.mode);
+    return this.tenants.updateAgent(
+      actingTenant(user, asSlug || headerSlug),
+      slug,
+      id,
+      body.siteId,
+      body.mode,
+    );
   }
 
   @Delete(':slug/agents/:id')
+  @Roles('operator', 'admin')
+  @AuditAction('tenant.agent.deleted', 'agent')
   removeAgent(
     @CurrentUser() user: AuthUser,
     @Param('slug') slug: string,
@@ -170,6 +236,10 @@ export class TenantsController {
     @Query('as') asSlug?: string,
     @Headers('x-eku-tenant') headerSlug?: string,
   ) {
-    return this.tenants.removeAgent(actingTenant(user, asSlug || headerSlug), slug, id);
+    return this.tenants.removeAgent(
+      actingTenant(user, asSlug || headerSlug),
+      slug,
+      id,
+    );
   }
 }

@@ -4,9 +4,19 @@ function publicHost(): string {
 }
 
 const host = publicHost();
+const protocol = globalThis.location?.protocol === 'https:' ? 'https:' : 'http:';
+const runtime = (
+  globalThis as typeof globalThis & {
+    __EKUMETRICS_CONFIG__?: {
+      apiUrl?: string;
+      grafanaUrl?: string;
+    };
+  }
+).__EKUMETRICS_CONFIG__;
 
-export const API_BASE_URL = `http://${host}:3000`;
-export const GRAFANA_BASE_URL = `http://${host}:3001`;
-export const KEYCLOAK_URL = `http://${host}:8080`;
-export const KEYCLOAK_REALM = 'ekumetrics';
-export const KEYCLOAK_CLIENT_ID = 'portal-web';
+function endpoint(configured: string | undefined, fallbackPort: number): string {
+  return configured?.replace(/\/$/, '') || `${protocol}//${host}:${fallbackPort}`;
+}
+
+export const API_BASE_URL = endpoint(runtime?.apiUrl, 3000);
+export const GRAFANA_BASE_URL = endpoint(runtime?.grafanaUrl, 3001);

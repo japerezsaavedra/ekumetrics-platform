@@ -19,7 +19,11 @@ type TimeAdvice = {
 })
 export class HomeTimeHelpComponent {
   protected readonly advice: TimeAdvice[] = [
-    { range: '1 o 5 min', refresh: 'Live 1s', purpose: 'Ver algo que pasa ahora: un pico, una prueba' },
+    {
+      range: '1 o 5 min',
+      refresh: 'Live 1s',
+      purpose: 'Ver algo que pasa ahora: un pico, una prueba',
+    },
     { range: '15 min', refresh: '30 s', purpose: 'Vigilancia del día a día', recommended: true },
     { range: '1 hora', refresh: '30 s', purpose: 'Tendencia corta' },
     { range: '3 a 6 h', refresh: '1 min', purpose: 'Turno o incidente reciente' },

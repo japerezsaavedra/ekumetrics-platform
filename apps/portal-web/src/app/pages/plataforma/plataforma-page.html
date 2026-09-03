@@ -1,0 +1,504 @@
+<section class="plataforma">
+  <eku-page-header title="E-Platform" subtitle="Estado del host, SLO, logs y traces.">
+    @if (error(); as message) {
+      <eku-error-state [message]="message" />
+    }
+    <button ekuActions type="button" class="eku-add" (click)="reload()" [disabled]="refreshing()">
+      {{ refreshing() ? 'Actualizando…' : 'Actualizar' }}
+    </button>
+  </eku-page-header>
+
+  @if (loading()) {
+    <eku-loading-skeleton label="Cargando E-Platform" [bars]="6" />
+  } @else if (data(); as view) {
+    <section class="plataforma__hostbar" aria-label="Host y servicios">
+      <dl class="plataforma__facts">
+        <div>
+          <dt>Host</dt>
+          <dd>{{ view.host.hostname || '—' }}</dd>
+        </div>
+        <div>
+          <dt>Sistema</dt>
+          <dd>{{ view.host.os || '—' }}</dd>
+        </div>
+        <div>
+          <dt>Arquitectura</dt>
+          <dd>{{ view.host.arch || '—' }}</dd>
+        </div>
+        <div>
+          <dt>Kernel</dt>
+          <dd>{{ view.host.kernel || '—' }}</dd>
+        </div>
+        <div>
+          <dt>Uptime</dt>
+          <dd>{{ uptime(view.host.uptimeSeconds) }}</dd>
+        </div>
+      </dl>
+      <ul class="plataforma__services" aria-label="Servicios">
+        @for (item of view.services; track item.job) {
+          <li class="plataforma__svc" [class.is-up]="item.up" [class.is-down]="!item.up">
+            <span class="plataforma__svc-name">{{ item.label }}</span>
+            <span class="plataforma__svc-state">{{ item.up ? 'Activo' : 'Sin señal' }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+
+    <div class="plataforma__kpis plataforma__kpis--slo" aria-label="SLO">
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="isOk(invert(view.slo.availability), thresholds().availabilityWarn, thresholds().availabilityCrit)"
+        [class.is-warn]="isWarn(invert(view.slo.availability), thresholds().availabilityWarn, thresholds().availabilityCrit)"
+        [class.is-crit]="isCrit(invert(view.slo.availability), thresholds().availabilityWarn, thresholds().availabilityCrit)"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">verified</mat-icon>
+            Disponibilidad
+            <eku-help-tip [hint]="hints.availability" />
+          </span>
+        </header>
+        <strong>{{ pct(view.slo.availability) }}</strong>
+      </article>
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="isOk(view.slo.errorBudget, thresholds().errorBudgetWarn, thresholds().errorBudgetCrit)"
+        [class.is-warn]="isWarn(view.slo.errorBudget, thresholds().errorBudgetWarn, thresholds().errorBudgetCrit)"
+        [class.is-crit]="isCrit(view.slo.errorBudget, thresholds().errorBudgetWarn, thresholds().errorBudgetCrit)"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">pie_chart</mat-icon>
+            Error budget
+            <eku-help-tip [hint]="hints.errorBudget" />
+          </span>
+        </header>
+        <strong>{{ budgetPct(view.slo.errorBudget) }}</strong>
+      </article>
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="isOk(invert(view.slo.latency), thresholds().latencyWarn, thresholds().latencyCrit)"
+        [class.is-warn]="isWarn(invert(view.slo.latency), thresholds().latencyWarn, thresholds().latencyCrit)"
+        [class.is-crit]="isCrit(invert(view.slo.latency), thresholds().latencyWarn, thresholds().latencyCrit)"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">speed</mat-icon>
+            Latencia
+            <eku-help-tip [hint]="hints.latency" />
+          </span>
+        </header>
+        <strong>{{ pct(view.slo.latency) }}</strong>
+      </article>
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="isOk(invert(view.slo.freshness), thresholds().freshnessWarn, thresholds().freshnessCrit)"
+        [class.is-warn]="isWarn(invert(view.slo.freshness), thresholds().freshnessWarn, thresholds().freshnessCrit)"
+        [class.is-crit]="isCrit(invert(view.slo.freshness), thresholds().freshnessWarn, thresholds().freshnessCrit)"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">sensors</mat-icon>
+            Agentes al día
+            <eku-help-tip [hint]="hints.freshness" />
+          </span>
+        </header>
+        <strong>{{ pct(view.slo.freshness) }}</strong>
+      </article>
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="isOk(view.slo.saturation?.value ?? null, thresholds().saturationWarn, thresholds().saturationCrit)"
+        [class.is-warn]="isWarn(view.slo.saturation?.value ?? null, thresholds().saturationWarn, thresholds().saturationCrit)"
+        [class.is-crit]="isCrit(view.slo.saturation?.value ?? null, thresholds().saturationWarn, thresholds().saturationCrit)"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">whatshot</mat-icon>
+            Saturación
+            <eku-help-tip [hint]="hints.saturation" />
+          </span>
+          <small>{{ view.slo.saturation?.driver || '—' }}</small>
+        </header>
+        <strong>{{ pct(view.slo.saturation?.value ?? null) }}</strong>
+        <p>
+          CPU {{ pct(view.slo.saturation?.cpu ?? null) }} · mem
+          {{ pct(view.slo.saturation?.memory ?? null) }} · disco
+          {{ pct(view.slo.saturation?.disk ?? null) }}
+        </p>
+      </article>
+    </div>
+
+    <div class="plataforma__kpis" aria-label="Host">
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="isOk(view.host.cpuUsed, thresholds().cpuWarn, thresholds().cpuCrit)"
+        [class.is-warn]="isWarn(view.host.cpuUsed, thresholds().cpuWarn, thresholds().cpuCrit)"
+        [class.is-crit]="isCrit(view.host.cpuUsed, thresholds().cpuWarn, thresholds().cpuCrit)"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">memory</mat-icon>
+            CPU
+            <eku-help-tip [hint]="hints.cpu" />
+          </span>
+          <small>{{ view.host.cpus ?? '—' }} núcleos</small>
+        </header>
+        <strong>{{ pct(view.host.cpuUsed) }}</strong>
+        <p>load {{ num(view.host.load1, 2) }} / {{ num(view.host.load5, 2) }} / {{ num(view.host.load15, 2) }}</p>
+      </article>
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="isOk(view.host.memUsed, thresholds().memWarn, thresholds().memCrit)"
+        [class.is-warn]="isWarn(view.host.memUsed, thresholds().memWarn, thresholds().memCrit)"
+        [class.is-crit]="isCrit(view.host.memUsed, thresholds().memWarn, thresholds().memCrit)"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">sd_card</mat-icon>
+            Memoria
+            <eku-help-tip [hint]="hints.memory" />
+          </span>
+          <small>{{ bytes(view.host.memAvailBytes) }} libre</small>
+        </header>
+        <strong>{{ pct(view.host.memUsed) }}</strong>
+        <p>{{ bytes(view.host.memTotalBytes) }} total · swap {{ pct(view.host.swapUsed) }}</p>
+      </article>
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="isOk(view.host.diskUsed, thresholds().diskWarn, thresholds().diskCrit)"
+        [class.is-warn]="isWarn(view.host.diskUsed, thresholds().diskWarn, thresholds().diskCrit)"
+        [class.is-crit]="isCrit(view.host.diskUsed, thresholds().diskWarn, thresholds().diskCrit)"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">hard_drive</mat-icon>
+            Disco
+            <eku-help-tip [hint]="hints.disk" />
+          </span>
+          <small>{{ bytes(view.host.diskAvailBytes) }} libre</small>
+        </header>
+        <strong>{{ pct(view.host.diskUsed) }}</strong>
+        <p>{{ rate(view.host.diskReadBytesPerSec) }} lect. · {{ rate(view.host.diskWriteBytesPerSec) }} escr.</p>
+      </article>
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="isOk((view.host.netErrorsPerSec ?? 0) + (view.host.netDropsPerSec ?? 0), thresholds().netWarn, thresholds().netCrit)"
+        [class.is-warn]="isWarn((view.host.netErrorsPerSec ?? 0) + (view.host.netDropsPerSec ?? 0), thresholds().netWarn, thresholds().netCrit)"
+        [class.is-crit]="isCrit((view.host.netErrorsPerSec ?? 0) + (view.host.netDropsPerSec ?? 0), thresholds().netWarn, thresholds().netCrit)"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">lan</mat-icon>
+            Red
+            <eku-help-tip [hint]="hints.network" />
+          </span>
+          <small>
+            @if ((view.host.nics ?? []).length === 1) {
+              {{ view.host.nics[0].device }}
+            } @else if ((view.host.nics ?? []).length > 1) {
+              {{ view.host.nics.length }} interfaces
+            } @else {
+              —
+            }
+          </small>
+        </header>
+        <div class="plataforma__net-rates">
+          <div>
+            <span>Bajada</span>
+            <strong>{{ rate(view.host.netRxBytesPerSec) }}</strong>
+          </div>
+          <div>
+            <span>Subida</span>
+            <strong>{{ rate(view.host.netTxBytesPerSec) }}</strong>
+          </div>
+        </div>
+        @if ((view.host.nics ?? []).length > 1) {
+          <ul class="plataforma__nics">
+            @for (nic of view.host.nics; track nic.device) {
+              <li>
+                <span>{{ nic.device }}</span>
+                <span>Bajada {{ rate(nic.rxBytesPerSec) }}</span>
+                <span>Subida {{ rate(nic.txBytesPerSec) }}</span>
+              </li>
+            }
+          </ul>
+        }
+        <p>err {{ num(view.host.netErrorsPerSec, 2) }} · drop {{ num(view.host.netDropsPerSec, 2) }} · {{ view.host.tcpEstablished ?? '—' }} TCP</p>
+      </article>
+    </div>
+
+    <div class="plataforma__kpis plataforma__kpis--api" aria-label="API">
+      <article class="plataforma__kpi">
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">swap_vert</mat-icon>
+            Solicitudes
+            <eku-help-tip [hint]="hints.requests" />
+          </span>
+        </header>
+        <strong>{{ num(view.api.requestsPerSec, 2) }}/s</strong>
+      </article>
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="isOk(view.api.errorRatio, thresholds().errorsWarn, thresholds().errorsCrit)"
+        [class.is-warn]="isWarn(view.api.errorRatio, thresholds().errorsWarn, thresholds().errorsCrit)"
+        [class.is-crit]="isCrit(view.api.errorRatio, thresholds().errorsWarn, thresholds().errorsCrit)"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">error</mat-icon>
+            Errores 5xx
+            <eku-help-tip [hint]="hints.errors" />
+          </span>
+        </header>
+        <strong>{{ pct(view.api.errorRatio) }}</strong>
+      </article>
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="isOk(view.api.p95Seconds, thresholds().p95Warn, thresholds().p95Crit)"
+        [class.is-warn]="isWarn(view.api.p95Seconds, thresholds().p95Warn, thresholds().p95Crit)"
+        [class.is-crit]="isCrit(view.api.p95Seconds, thresholds().p95Warn, thresholds().p95Crit)"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">timer</mat-icon>
+            Latencia p95
+            <eku-help-tip [hint]="hints.p95" />
+          </span>
+        </header>
+        <strong>{{ ms(view.api.p95Seconds) }}</strong>
+      </article>
+      <article class="plataforma__kpi">
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">schedule</mat-icon>
+            Uptime
+            <eku-help-tip [hint]="hints.uptime" />
+          </span>
+        </header>
+        <strong>{{ uptime(view.host.uptimeSeconds) }}</strong>
+      </article>
+    </div>
+
+    <div class="plataforma__charts">
+      @if (hostChart(); as option) {
+        <article class="plataforma__chart">
+          <h2>CPU, memoria y disco <eku-help-tip [hint]="hints.hostChart" /></h2>
+          <eku-chart [option]="option" />
+        </article>
+      }
+      @if (netChart(); as option) {
+        <article class="plataforma__chart">
+          <h2>Red del host <eku-help-tip [hint]="hints.netChart" /></h2>
+          <eku-chart [option]="option" />
+        </article>
+      }
+      @if (apiChart(); as option) {
+        <article class="plataforma__chart plataforma__chart--wide">
+          <h2>Solicitudes de la API <eku-help-tip [hint]="hints.apiChart" /></h2>
+          <eku-chart [option]="option" />
+        </article>
+      }
+    </div>
+
+    <div class="plataforma__split">
+      <section>
+        <header class="plataforma__section-head">
+          <h2>Logs <eku-help-tip [hint]="hints.logs" /></h2>
+          <span>{{ logRangeLabel() }}</span>
+        </header>
+        <form class="plataforma__logs-toolbar" [formGroup]="logsForm">
+          <label class="eku-field">
+            <span>Buscar</span>
+            <input type="search" formControlName="query" placeholder="texto o servicio" />
+          </label>
+          <label class="eku-field">
+            <span>Nivel</span>
+            <select formControlName="level">
+              @for (level of logLevels; track level) {
+                <option [ngValue]="level">{{ level }}</option>
+              }
+            </select>
+          </label>
+          <label class="eku-field">
+            <span>Desde</span>
+            <input type="datetime-local" formControlName="from" />
+          </label>
+          <label class="eku-field">
+            <span>Hasta</span>
+            <input type="datetime-local" formControlName="to" />
+          </label>
+          <label class="eku-field">
+            <span>Registros</span>
+            <select formControlName="pageSize">
+              @for (size of logPageSizes; track size) {
+                <option [ngValue]="size">{{ size }}</option>
+              }
+            </select>
+          </label>
+        </form>
+        @if (logRows().length === 0) {
+          <eku-empty-state
+            title="Sin logs todavía"
+            message="Alloy envía a Loki los contenedores ekumetrics-*. Aparecerán en cuanto haya salida."
+          />
+        } @else if (filteredLogs().length === 0) {
+          <eku-empty-state
+            title="Sin coincidencias"
+            message="Ningún log coincide con la búsqueda."
+          />
+        } @else {
+          <table class="plataforma__table plataforma__table--logs">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Fecha</th>
+                <th>Nivel</th>
+                <th>Servicio</th>
+                <th>Mensaje</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (line of pagedLogs(); track logKey(line, $index)) {
+                <tr
+                  class="plataforma__log"
+                  [class.is-open]="isLogOpen(line, $index)"
+                  [class.is-error]="levelOf(line) === 'error'"
+                  [class.is-warn]="levelOf(line) === 'warning'"
+                >
+                  <td>
+                    <button
+                      type="button"
+                      class="plataforma__log-toggle"
+                      (click)="toggleLog(line, $index)"
+                      [attr.aria-expanded]="isLogOpen(line, $index)"
+                      [attr.aria-label]="isLogOpen(line, $index) ? 'Cerrar log' : 'Abrir log'"
+                    >
+                      <mat-icon aria-hidden="true">{{
+                        isLogOpen(line, $index) ? 'expand_less' : 'expand_more'
+                      }}</mat-icon>
+                    </button>
+                  </td>
+                  <td class="plataforma__log-time">
+                    {{ line.ts | date: 'yyyy-MM-dd HH:mm:ss.SSS' }}
+                  </td>
+                  <td>
+                    <span class="plataforma__level" [attr.data-level]="levelOf(line)">
+                      {{ levelOf(line) }}
+                    </span>
+                  </td>
+                  <td>
+                    @for (part of highlightLog(service(line.fields)); track $index) {
+                      @if (part.hit) {
+                        <mark>{{ part.value }}</mark>
+                      } @else {
+                        {{ part.value }}
+                      }
+                    }
+                  </td>
+                  <td>
+                    <span class="plataforma__log-preview">
+                      @for (part of highlightLog(line.line); track $index) {
+                        @if (part.hit) {
+                          <mark>{{ part.value }}</mark>
+                        } @else {
+                          {{ part.value }}
+                        }
+                      }
+                    </span>
+                  </td>
+                </tr>
+                @if (isLogOpen(line, $index)) {
+                  <tr class="plataforma__log-detail">
+                    <td colspan="5">
+                      <dl class="plataforma__log-pairs">
+                        <div>
+                          <dt>fecha</dt>
+                          <dd>{{ line.ts | date: 'yyyy-MM-dd HH:mm:ss.SSS' }}</dd>
+                        </div>
+                        <div>
+                          <dt>nivel</dt>
+                          <dd>{{ levelOf(line) }}</dd>
+                        </div>
+                        <div>
+                          <dt>servicio</dt>
+                          <dd>{{ service(line.fields) }}</dd>
+                        </div>
+                        @for (pair of logPairs(line); track pair[0]) {
+                          <div>
+                            <dt>{{ pair[0] }}</dt>
+                            <dd>{{ pair[1] }}</dd>
+                          </div>
+                        }
+                        <div class="plataforma__log-pairs--msg">
+                          <dt>mensaje</dt>
+                          <dd>
+                            @for (part of highlightLog(line.line); track $index) {
+                              @if (part.hit) {
+                                <mark>{{ part.value }}</mark>
+                              } @else {
+                                {{ part.value }}
+                              }
+                            }
+                          </dd>
+                        </div>
+                      </dl>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+          <div class="plataforma__pager">
+            <button type="button" class="eku-add" (click)="prevLogPage()" [disabled]="logPageView() <= 1">
+              Anterior
+            </button>
+            <span>Página {{ logPageView() }} de {{ logPageCount() }}</span>
+            <button
+              type="button"
+              class="eku-add"
+              (click)="nextLogPage()"
+              [disabled]="logPageView() >= logPageCount()"
+            >
+              Siguiente
+            </button>
+          </div>
+        }
+      </section>
+
+      <section>
+        <header class="plataforma__section-head">
+          <h2>Traces <eku-help-tip [hint]="hints.traces" /></h2>
+          <span>{{ view.traces.length }}</span>
+        </header>
+        @if (view.traces.length === 0) {
+          <eku-empty-state
+            title="Sin traces todavía"
+            message="La API envía OpenTelemetry a Tempo. Use el portal un momento y vuelva a actualizar."
+          />
+        } @else {
+          <table class="plataforma__table">
+            <thead>
+              <tr>
+                <th>Servicio</th>
+                <th>Operación</th>
+                <th>Duración</th>
+                <th>Trace</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (trace of view.traces; track trace.traceId) {
+                <tr>
+                  <td>{{ trace.rootServiceName || 'API' }}</td>
+                  <td>{{ trace.rootTraceName || '—' }}</td>
+                  <td>{{ trace.durationMs }} ms</td>
+                  <td>{{ trace.traceId.slice(0, 16) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+    </div>
+  }
+</section>

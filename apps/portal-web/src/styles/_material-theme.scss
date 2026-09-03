@@ -1,4 +1,4 @@
-@use "@angular/material" as mat;
+@use '@angular/material' as mat;
 
 html {
   height: 100%;
@@ -11,16 +11,16 @@ html {
       ),
       typography: (
         plain-family: (
-          "IBM Plex Sans",
-          "Open Sans",
-          "Helvetica Neue",
+          'IBM Plex Sans',
+          'Open Sans',
+          'Helvetica Neue',
           Arial,
           sans-serif,
         ),
         brand-family: (
-          "IBM Plex Sans",
-          "Open Sans",
-          "Helvetica Neue",
+          'IBM Plex Sans',
+          'Open Sans',
+          'Helvetica Neue',
           Arial,
           sans-serif,
         ),

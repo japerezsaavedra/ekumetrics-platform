@@ -5,7 +5,11 @@
   />
 
   @if (active(); as current) {
-    <article class="settings__status" [class.is-on]="current.online" [class.is-off]="!current.online">
+    <article
+      class="settings__status"
+      [class.is-on]="current.online"
+      [class.is-off]="!current.online"
+    >
       <span class="settings__status-chip">{{ current.online ? 'Activo' : 'Inactivo' }}</span>
       <p>
         <strong>{{ current.label }}</strong>
@@ -51,7 +55,11 @@
           formControlName="apiKey"
           autocomplete="new-password"
           name="eku-ai-key"
-          [placeholder]="hasSavedKey() ? 'Clave guardada. Déjela en blanco para conservarla.' : 'Pegue la clave y pulse Guardar'"
+          [placeholder]="
+            hasSavedKey()
+              ? 'Clave guardada. Déjela en blanco para conservarla.'
+              : 'Pegue la clave y pulse Guardar'
+          "
         />
         <small>
           {{
@@ -84,9 +92,7 @@
         rows="4"
         placeholder="Ejemplo: priorice el sitio planta-norte y avise si un agente SAP queda en silencio."
       ></textarea>
-      <small>
-        Se añade al prompt de Ekumetrics. No sustituye las reglas de producto.
-      </small>
+      <small> Se añade al prompt de Ekumetrics. No sustituye las reglas de producto. </small>
     </label>
 
     <button type="submit" [disabled]="loading()">
@@ -100,4 +106,107 @@
   @if (error(); as message) {
     <eku-error-state [message]="message" />
   }
+
+  <section class="settings__knowledge" aria-labelledby="knowledge-title">
+    <div>
+      <h2 id="knowledge-title">Conocimiento aprobado</h2>
+      <p>
+        Indexe documentación de producto, runbooks y postmortems. Usar la misma clave de fuente
+        reemplaza la versión anterior de forma atómica.
+      </p>
+    </div>
+
+    <form class="eku-form settings__form" [formGroup]="knowledgeForm" (ngSubmit)="saveKnowledge()">
+      <label class="eku-field">
+        <span>Clave de fuente</span>
+        <input formControlName="sourceKey" placeholder="runbooks/postgres-capacity" />
+        <small>Identificador estable, sin espacios.</small>
+      </label>
+      <label class="eku-field">
+        <span>Tipo</span>
+        <select formControlName="sourceType">
+          <option value="product">Producto</option>
+          <option value="runbook">Runbook</option>
+          <option value="postmortem">Postmortem</option>
+        </select>
+        <small>La telemetría cruda no se admite en este corpus.</small>
+      </label>
+      <label class="eku-field settings__span">
+        <span>Título</span>
+        <input formControlName="title" placeholder="Diagnóstico de capacidad PostgreSQL" />
+        <small></small>
+      </label>
+      <label class="eku-field">
+        <span>Versión</span>
+        <input formControlName="version" placeholder="1.0.0" />
+        <small></small>
+      </label>
+      <label class="eku-field">
+        <span>Componente</span>
+        <input formControlName="component" placeholder="postgresql" />
+        <small>Opcional.</small>
+      </label>
+      <label class="eku-field settings__span">
+        <span>Vigente hasta</span>
+        <input type="datetime-local" formControlName="validUntil" />
+        <small>Opcional; los documentos vencidos dejan de recuperarse.</small>
+      </label>
+      <label class="eku-field settings__prompt">
+        <span>Contenido Markdown</span>
+        <textarea
+          formControlName="content"
+          rows="10"
+          placeholder="# Diagnóstico&#10;Pasos aprobados…"
+        ></textarea>
+        <small>Máximo 200.000 caracteres y 200 fragmentos.</small>
+      </label>
+      <button type="submit" [disabled]="knowledgeLoading() || knowledgeForm.invalid">
+        {{ knowledgeLoading() ? 'Indexando…' : 'Aprobar e indexar' }}
+      </button>
+    </form>
+
+    @if (knowledgeSaved()) {
+      <p class="settings__ok">Documento aprobado e indexado correctamente.</p>
+    }
+    @if (knowledgeError(); as message) {
+      <eku-error-state [message]="message" />
+    }
+
+    <div class="settings__corpus">
+      <h3>Corpus del tenant ({{ knowledge().length }})</h3>
+      @if (!knowledge().length) {
+        <p class="settings__hint">Todavía no hay documentos aprobados.</p>
+      } @else {
+        <ul>
+          @for (item of knowledge(); track item.id) {
+            <li>
+              <div>
+                <strong>{{ item.title }}</strong>
+                <span>
+                  {{ sourceTypeLabel(item.sourceType) }} · {{ item.sourceKey }} · v{{
+                    item.version
+                  }}
+                </span>
+                <small>
+                  {{ item.chunkCount }} fragmentos · aprobado {{ formatDate(item.approvedAt) }} por
+                  {{ item.approvedBy }}
+                </small>
+              </div>
+              <span class="settings__corpus-status" [class]="'is-' + item.status">
+                {{ statusLabel(item.status) }}
+              </span>
+              <button
+                type="button"
+                class="settings__delete"
+                (click)="deleteKnowledge(item)"
+                [disabled]="knowledgeLoading()"
+              >
+                Eliminar
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  </section>
 </section>

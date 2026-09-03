@@ -1,0 +1,98 @@
+<section class="thresholds">
+  <eku-page-header [title]="title()" [subtitle]="subtitle()">
+    @if (scope()) {
+      <div ekuActions class="thresholds__actions">
+        <a routerLink="/administracion/umbrales" class="eku-add">Volver</a>
+        <button type="submit" form="thresholds-form" class="eku-add" [disabled]="loading()">
+          {{ loading() ? 'Guardando…' : 'Guardar' }}
+        </button>
+      </div>
+    }
+    @if (error(); as message) {
+      <eku-error-state [message]="message" />
+    } @else if (saved()) {
+      <p>Umbrales actualizados.</p>
+    }
+  </eku-page-header>
+
+  @if (!scope()) {
+    <div class="thresholds__catalog">
+      <a class="thresholds__card" routerLink="/administracion/umbrales/plataforma">
+        <small>Plataforma</small>
+        <strong>E-Platform</strong>
+        <p>Host de control, SLO y API.</p>
+      </a>
+      <a class="thresholds__card" routerLink="/administracion/umbrales/agentes">
+        <small>Agentes</small>
+        <strong>{{ tenantName() }}</strong>
+        <p>
+          {{ agentCount() === 1 ? '1 host conectado.' : agentCount() + ' hosts conectados.' }}
+        </p>
+      </a>
+    </div>
+  } @else {
+    <form id="thresholds-form" class="eku-form thresholds__form" [formGroup]="form" (ngSubmit)="submit()">
+      @for (group of visibleGroups(); track group.title) {
+        <fieldset class="thresholds__block">
+          <legend>{{ group.title }}</legend>
+          <div class="thresholds__head" aria-hidden="true">
+            <span>Métrica</span>
+            <span>Rango</span>
+            <span>Aviso desde</span>
+            <span>Crítico desde</span>
+          </div>
+          @for (metric of group.metrics; track metric.warn) {
+            @let range = band(metric);
+            <article class="thresholds__row">
+              <div class="thresholds__name">
+                <span>Métrica</span>
+                <h3>{{ metric.title }}</h3>
+                <small>{{ metric.hint }}</small>
+              </div>
+              <div class="thresholds__range" [attr.aria-label]="range.label">
+                <span></span>
+                <div class="thresholds__bar">
+                  <i class="is-ok" [style.flex-grow]="range.ok"></i>
+                  <i class="is-warn" [style.flex-grow]="range.warn"></i>
+                  <i class="is-crit" [style.flex-grow]="range.crit"></i>
+                </div>
+                <small></small>
+              </div>
+              <label class="eku-field thresholds__field--warn">
+                <span>Aviso desde</span>
+                <input
+                  type="number"
+                  [formControlName]="metric.warn"
+                  min="0"
+                  [max]="metric.inputMax"
+                  [step]="metric.step"
+                />
+                <small [class.is-error]="fieldInvalid(metric.warn) || pairInvalid(metric)">
+                  {{
+                    fieldInvalid(metric.warn) || pairInvalid(metric)
+                      ? 'Aviso ≤ crítico'
+                      : metric.unit
+                  }}
+                </small>
+              </label>
+              <label class="eku-field thresholds__field--crit">
+                <span>Crítico desde</span>
+                <input
+                  type="number"
+                  [formControlName]="metric.crit"
+                  min="0"
+                  [max]="metric.inputMax"
+                  [step]="metric.step"
+                />
+                <small [class.is-error]="fieldInvalid(metric.crit)">
+                  {{ fieldInvalid(metric.crit) ? 'Indique el crítico.' : metric.unit }}
+                </small>
+              </label>
+            </article>
+          }
+        </fieldset>
+      }
+
+    </form>
+  }
+</section>

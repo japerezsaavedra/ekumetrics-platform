@@ -1,0 +1,42 @@
+<main class="kiosk-activation">
+  <section class="kiosk-activation__card">
+    <h1>Activar pantalla</h1>
+    <p>
+      Pegue el <strong>ID</strong> y la <strong>Credencial</strong> de la tarjeta
+      «Credencial lista» en Administración. No use el nombre de la pantalla.
+    </p>
+    <form [formGroup]="form" (ngSubmit)="activate()">
+      <label class="eku-field">
+        <span>ID</span>
+        <input
+          formControlName="deviceId"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="cmtc8ru3n00003uvv1enzbqco"
+        />
+        @if (form.controls.deviceId.invalid && form.controls.deviceId.touched) {
+          <small>Pegue el ID completo, no el nombre.</small>
+        }
+      </label>
+      <label class="eku-field">
+        <span>Credencial</span>
+        <input
+          formControlName="deviceSecret"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="KwLjLtxBzvkrtmWz95-ovRfu4w_qA65oM2gApNUOVL8"
+        />
+        @if (form.controls.deviceSecret.invalid && form.controls.deviceSecret.touched) {
+          <small>Pegue la credencial completa.</small>
+        }
+      </label>
+      @if (error()) {
+        <p class="kiosk-activation__error" role="alert">{{ error() }}</p>
+      }
+      <button type="submit" [disabled]="saving()">
+        {{ saving() ? 'Activando…' : 'Activar' }}
+      </button>
+    </form>
+  </section>
+</main>

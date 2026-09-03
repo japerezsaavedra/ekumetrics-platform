@@ -15,7 +15,13 @@ import {
 
 @Component({
   selector: 'app-tenants-page',
-  imports: [ReactiveFormsModule, MatIcon, MatTooltip, EkuPageHeaderComponent, EkuErrorStateComponent],
+  imports: [
+    ReactiveFormsModule,
+    MatIcon,
+    MatTooltip,
+    EkuPageHeaderComponent,
+    EkuErrorStateComponent,
+  ],
   templateUrl: './tenants-page.html',
   styleUrl: './tenants-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -57,7 +63,10 @@ export class TenantsPage {
   }
 
   protected emailDomainInvalid(): boolean {
-    return this.form.hasError('emailDomain') && (this.form.controls.adminEmail.touched || this.form.controls.adminEmail.dirty);
+    return (
+      this.form.hasError('emailDomain') &&
+      (this.form.controls.adminEmail.touched || this.form.controls.adminEmail.dirty)
+    );
   }
 
   protected domainHint(): string {
@@ -115,7 +124,9 @@ export class TenantsPage {
       this.error.set('El tenant default no se puede eliminar.');
       return;
     }
-    if (!window.confirm(`¿Eliminar el tenant ${item.name}? Se borrarán sitios, agentes y usuarios.`)) {
+    if (
+      !window.confirm(`¿Eliminar el tenant ${item.name}? Se borrarán sitios, agentes y usuarios.`)
+    ) {
       return;
     }
     this.http.delete(`${API_BASE_URL}/v1/tenants/${item.slug}?as=default`).subscribe({
@@ -193,7 +204,10 @@ export class TenantsPage {
       },
       error: (err: { error?: { message?: string } }) => {
         this.saving.set(false);
-        this.error.set(err.error?.message ?? (editingSlug ? 'No se pudo guardar el tenant.' : 'No se pudo crear el tenant.'));
+        this.error.set(
+          err.error?.message ??
+            (editingSlug ? 'No se pudo guardar el tenant.' : 'No se pudo crear el tenant.'),
+        );
       },
     });
   }

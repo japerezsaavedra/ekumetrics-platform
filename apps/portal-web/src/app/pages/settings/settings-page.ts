@@ -37,6 +37,23 @@ type AiSettings = {
   active?: AiActive;
 };
 
+type KnowledgeDocument = {
+  id: string;
+  sourceKey: string;
+  sourceType: 'product' | 'runbook' | 'postmortem';
+  title: string;
+  version: string;
+  component: string | null;
+  checksum: string;
+  approvedBy: string;
+  approvedAt: string;
+  validFrom: string;
+  validUntil: string | null;
+  updatedAt: string;
+  chunkCount: number;
+  status: 'active' | 'scheduled' | 'expired';
+};
+
 @Component({
   selector: 'app-settings-page',
   imports: [ReactiveFormsModule, EkuPageHeaderComponent, EkuErrorStateComponent],
@@ -53,6 +70,10 @@ export class SettingsPage {
   protected readonly error = signal<string | null>(null);
   protected readonly saved = signal(false);
   protected readonly loading = signal(false);
+  protected readonly knowledge = signal<KnowledgeDocument[]>([]);
+  protected readonly knowledgeLoading = signal(false);
+  protected readonly knowledgeError = signal<string | null>(null);
+  protected readonly knowledgeSaved = signal(false);
   private readonly savedService = signal('ollama');
   private readonly savedHasKey = signal(false);
   private readonly savedModel = signal('');
@@ -65,6 +86,16 @@ export class SettingsPage {
     systemPrompt: [''],
   });
 
+  protected readonly knowledgeForm = this.fb.nonNullable.group({
+    sourceKey: ['', [Validators.required, Validators.pattern(/^[A-Za-z0-9._:/-]+$/)]],
+    sourceType: ['runbook' as KnowledgeDocument['sourceType'], [Validators.required]],
+    title: ['', [Validators.required, Validators.maxLength(300)]],
+    version: ['1.0.0', [Validators.required, Validators.pattern(/^[A-Za-z0-9._:/-]+$/)]],
+    component: ['', [Validators.pattern(/^[A-Za-z0-9._:/-]*$/)]],
+    validUntil: [''],
+    content: ['', [Validators.required, Validators.minLength(10), Validators.maxLength(200_000)]],
+  });
+
   constructor() {
     this.form.controls.service.valueChanges.subscribe((serviceId) => {
       this.applyServiceDefaults(serviceId);
@@ -74,6 +105,7 @@ export class SettingsPage {
       next: (value) => this.applySettings(value),
       error: () => this.error.set('No se pudo leer la configuracion. Inicie platform-api.'),
     });
+    this.loadKnowledge();
   }
 
   protected selectedService(): AiServiceOption | undefined {
@@ -141,6 +173,75 @@ export class SettingsPage {
     return control.invalid && (control.touched || control.dirty);
   }
 
+  protected saveKnowledge(): void {
+    if (this.knowledgeForm.invalid) {
+      this.knowledgeForm.markAllAsTouched();
+      return;
+    }
+    this.knowledgeLoading.set(true);
+    this.knowledgeError.set(null);
+    this.knowledgeSaved.set(false);
+    const value = this.knowledgeForm.getRawValue();
+    this.http
+      .post(`${API_BASE_URL}/v1/ai/knowledge/documents`, {
+        ...value,
+        component: value.component.trim() || undefined,
+        validUntil: value.validUntil ? new Date(value.validUntil).toISOString() : undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.knowledgeLoading.set(false);
+          this.knowledgeSaved.set(true);
+          this.knowledgeForm.reset({
+            sourceKey: '',
+            sourceType: 'runbook',
+            title: '',
+            version: '1.0.0',
+            component: '',
+            validUntil: '',
+            content: '',
+          });
+          this.loadKnowledge();
+        },
+        error: (error: { error?: { message?: string | string[] } }) => {
+          this.knowledgeLoading.set(false);
+          this.knowledgeError.set(this.apiError(error, 'No se pudo indexar el documento.'));
+        },
+      });
+  }
+
+  protected deleteKnowledge(item: KnowledgeDocument): void {
+    if (!window.confirm(`Eliminar "${item.title}" y todos sus fragmentos?`)) return;
+    this.knowledgeLoading.set(true);
+    this.knowledgeError.set(null);
+    this.http.delete(`${API_BASE_URL}/v1/ai/knowledge/documents/${item.id}`).subscribe({
+      next: () => {
+        this.knowledgeLoading.set(false);
+        this.loadKnowledge();
+      },
+      error: (error: { error?: { message?: string | string[] } }) => {
+        this.knowledgeLoading.set(false);
+        this.knowledgeError.set(this.apiError(error, 'No se pudo eliminar el documento.'));
+      },
+    });
+  }
+
+  protected sourceTypeLabel(value: KnowledgeDocument['sourceType']): string {
+    return { product: 'Producto', runbook: 'Runbook', postmortem: 'Postmortem' }[value];
+  }
+
+  protected statusLabel(value: KnowledgeDocument['status']): string {
+    return { active: 'Vigente', scheduled: 'Programado', expired: 'Vencido' }[value];
+  }
+
+  protected formatDate(value: string): string {
+    return new Date(value).toLocaleDateString('es', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+
   private applySettings(value: AiSettings): void {
     this.catalog.set(value.services ?? this.catalog());
     this.active.set(value.active ?? this.active());
@@ -168,7 +269,9 @@ export class SettingsPage {
     } else if (service?.models.length && !service.models.includes(this.form.controls.model.value)) {
       this.form.controls.model.setValue(service.defaultModel || service.models[0]);
     }
-    this.form.controls.baseUrl.setValue(service?.id === 'openai_compat' ? service.savedBaseUrl || '' : '');
+    this.form.controls.baseUrl.setValue(
+      service?.id === 'openai_compat' ? service.savedBaseUrl || '' : '',
+    );
   }
 
   private syncValidators(): void {
@@ -176,10 +279,21 @@ export class SettingsPage {
     this.form.controls.apiKey.setValidators(
       service?.needsKey && !this.hasSavedKey() ? [Validators.required] : [],
     );
-    this.form.controls.baseUrl.setValidators(
-      service?.needsBaseUrl ? [Validators.required] : [],
-    );
+    this.form.controls.baseUrl.setValidators(service?.needsBaseUrl ? [Validators.required] : []);
     this.form.controls.apiKey.updateValueAndValidity({ emitEvent: false });
     this.form.controls.baseUrl.updateValueAndValidity({ emitEvent: false });
+  }
+
+  private loadKnowledge(): void {
+    this.http.get<KnowledgeDocument[]>(`${API_BASE_URL}/v1/ai/knowledge/documents`).subscribe({
+      next: (items) => this.knowledge.set(items),
+      error: (error: { error?: { message?: string | string[] } }) =>
+        this.knowledgeError.set(this.apiError(error, 'No se pudo leer el corpus aprobado.')),
+    });
+  }
+
+  private apiError(error: { error?: { message?: string | string[] } }, fallback: string): string {
+    const raw = error.error?.message;
+    return Array.isArray(raw) ? raw.join(' ') : (raw ?? fallback);
   }
 }

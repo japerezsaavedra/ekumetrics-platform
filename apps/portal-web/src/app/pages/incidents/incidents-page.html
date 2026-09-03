@@ -1,0 +1,92 @@
+<section class="incidents">
+  <eku-page-header
+    title="Incidentes"
+    subtitle="Un caso correlacionado, no una lista de alertas. La causa sale del grafo y de la ventana temporal."
+  >
+    <div ekuActions class="incidents__actions">
+      <button type="button" class="eku-add" (click)="load()">Actualizar</button>
+      <button type="button" class="eku-add" (click)="correlate()" [disabled]="correlating()">
+        {{ correlating() ? 'Correlacionando…' : 'Correlacionar' }}
+      </button>
+    </div>
+    @if (error(); as message) {
+      <eku-error-state [message]="message" />
+    } @else if (!loading()) {
+      <p>{{ openCount() }} abiertos · {{ items().length }} en total</p>
+    }
+  </eku-page-header>
+
+  @if (loading()) {
+    <eku-loading-skeleton label="Cargando incidentes" [bars]="4" />
+  } @else if (items().length === 0) {
+    <eku-empty-state
+      message="No hay incidentes. Correlacione las alertas activas cuando el grafo ya tenga vecinos LLDP."
+    />
+  } @else {
+    <div class="incidents__layout">
+      <ul class="incidents__list">
+        @for (item of items(); track item.id) {
+          <li>
+            <button
+              type="button"
+              class="incidents__row"
+              [class.is-on]="item.id === selected()?.id"
+              (click)="select(item)"
+            >
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.alertCount }} alertas · {{ item.severity }}</span>
+            </button>
+          </li>
+        }
+      </ul>
+      @if (selected(); as incident) {
+        <article class="incidents__detail">
+          <header>
+            <h2>{{ incident.title }}</h2>
+            <p>{{ incident.status }} · {{ incident.updatedAt | date: 'short' }}</p>
+          </header>
+          <dl>
+            <div>
+              <dt>Causa probable</dt>
+              <dd>{{ incident.causeName || 'Sin elemento común en el grafo' }}</dd>
+            </div>
+            <div>
+              <dt>Confianza</dt>
+              <dd>{{ confidence(incident.confidence) }}</dd>
+            </div>
+            <div>
+              <dt>Sitio</dt>
+              <dd>{{ incident.siteId || '—' }}</dd>
+            </div>
+            <div>
+              <dt>Ventana</dt>
+              <dd>
+                @if (incident.windowStart) {
+                  {{ incident.windowStart | date: 'short' }}
+                  —
+                  {{ incident.windowEnd | date: 'short' }}
+                } @else {
+                  —
+                }
+              </dd>
+            </div>
+          </dl>
+          <h3>Alertas</h3>
+          <ul>
+            @for (alert of incident.members?.alerts ?? []; track alert.fingerprint) {
+              <li>{{ alert.name }} · {{ alert.severity }}</li>
+            }
+          </ul>
+          <h3>Impacto</h3>
+          <ul>
+            @for (node of incident.members?.impact ?? []; track node) {
+              <li>{{ node }}</li>
+            } @empty {
+              <li>Sin vecinos persistidos.</li>
+            }
+          </ul>
+        </article>
+      }
+    </div>
+  }
+</section>

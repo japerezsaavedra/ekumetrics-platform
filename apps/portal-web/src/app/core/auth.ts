@@ -1,29 +1,22 @@
-import { Injectable, computed, signal } from '@angular/core';
-import Keycloak from 'keycloak-js';
-import { API_BASE_URL, KEYCLOAK_CLIENT_ID, KEYCLOAK_REALM, KEYCLOAK_URL } from './api';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { API_BASE_URL } from './api';
 
 export type AuthRole = 'operator' | 'admin' | 'viewer';
 
-const STORAGE_KEY = 'eku-oidc';
+const KEEP_ALIVE_INTERVAL_MS = 60_000;
 
-type StoredTokens = {
-  access_token: string;
-  refresh_token: string;
-  id_token: string;
-};
-
-type AuthPayload = Partial<StoredTokens> & {
-  message?: string | string[];
-  requiresPasswordChange?: boolean;
+type SessionResponse = {
+  user: { email: string; name: string; tenant: string; role: AuthRole };
+  csrfToken: string;
+  mfaEnrollmentRequired?: boolean;
+  redirect?: string;
 };
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly keycloak = new Keycloak({
-    url: KEYCLOAK_URL,
-    realm: KEYCLOAK_REALM,
-    clientId: KEYCLOAK_CLIENT_ID,
-  });
+  private readonly http = inject(HttpClient);
   readonly ready = signal(false);
   readonly error = signal<string | null>(null);
   readonly authenticated = signal(false);
@@ -32,165 +25,195 @@ export class AuthService {
   readonly tenant = computed(() => this.profile()?.tenant ?? 'default');
   readonly role = computed(() => this.profile()?.role ?? 'viewer');
   readonly isOperator = computed(() => this.role() === 'operator');
-  private readonly profile = signal<{
-    email: string;
-    name: string;
-    tenant: string;
-    role: AuthRole;
-  } | null>(null);
+  readonly mfaEnrollmentRequired = signal(false);
+  private keepAliveTimer: number | null = null;
+  private csrf = '';
+  private refreshInFlight: Promise<void> | null = null;
+  private lifecycleListenersRegistered = false;
+  private readonly profile = signal<SessionResponse['user'] | null>(null);
 
   async init(): Promise<void> {
+    this.registerLifecycleListeners();
     try {
-      const stored = this.readTokens();
-      const ok = await this.keycloak.init({
-        token: stored?.access_token,
-        refreshToken: stored?.refresh_token,
-        idToken: stored?.id_token,
-        checkLoginIframe: false,
-      });
-      this.authenticated.set(!!ok && !!this.keycloak.token);
-      this.syncProfile();
-      this.persist();
-    } catch {
+      await this.loadSession();
+    } catch (error) {
       this.clear();
-      this.error.set('No se pudo conectar con Keycloak. Ejecute npm run lab:iam.');
+      if (!(error instanceof HttpErrorResponse) || error.status !== 401) {
+        this.error.set('No se pudo consultar la sesión segura.');
+      }
     } finally {
       this.ready.set(true);
     }
   }
 
-  async signIn(email: string, password: string): Promise<'ok' | 'change-password'> {
-    this.error.set(null);
-    const response = await this.request(`${API_BASE_URL}/v1/auth/login`, { email, password });
-    const payload = await this.readPayload(response);
-    if (response.ok && payload.requiresPasswordChange) {
-      return 'change-password';
-    }
-    if (!response.ok || !payload.access_token) {
-      throw new Error(this.apiMessage(payload.message, 'Las credenciales no son válidas.'));
-    }
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-    return 'ok';
-  }
-
-  async completeFirstPassword(
-    email: string,
-    currentPassword: string,
-    newPassword: string,
-    confirmPassword: string,
-  ): Promise<void> {
-    this.error.set(null);
-    const response = await this.request(`${API_BASE_URL}/v1/auth/first-password`, {
-      email,
-      currentPassword,
-      newPassword,
-      confirmPassword,
-    });
-    const payload = await this.readPayload(response);
-    if (!response.ok || !payload.access_token) {
-      throw new Error(this.apiMessage(payload.message, 'No fue posible actualizar la contraseña.'));
-    }
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }
-
-  private async request(url: string, body: Record<string, string>): Promise<Response> {
-    try {
-      return await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-    } catch {
-      throw new Error('No se pudo conectar con el servidor. Compruebe que la API este en marcha.');
-    }
-  }
-
-  private async readPayload(response: Response): Promise<AuthPayload> {
-    try {
-      return (await response.json()) as AuthPayload;
-    } catch {
-      return {};
-    }
-  }
-
-  private apiMessage(message: string | string[] | undefined, fallback: string): string {
-    if (Array.isArray(message)) {
-      return message[0] || fallback;
-    }
-    return message || fallback;
-  }
-
-  logout(): void {
-    this.clear();
-    window.location.assign('/login');
-  }
-
-  token(): string {
-    return this.keycloak.token ?? '';
-  }
-
-  async refresh(): Promise<string> {
-    if (!this.authenticated()) {
-      return '';
-    }
-    try {
-      await this.keycloak.updateToken(30);
-      this.syncProfile();
-      this.persist();
-    } catch {
-      this.clear();
-    }
-    return this.token();
-  }
-
-  private persist(): void {
-    if (!this.keycloak.token || !this.keycloak.refreshToken) {
-      return;
-    }
-    sessionStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        access_token: this.keycloak.token,
-        refresh_token: this.keycloak.refreshToken,
-        id_token: this.keycloak.idToken ?? '',
-      }),
+  async loginOptions(email: string): Promise<{
+    mfaRequired: boolean;
+    totpEnrolled: boolean;
+    entraEnabled: boolean;
+    adEnabled: boolean;
+    idpHint: string;
+  }> {
+    return firstValueFrom(
+      this.http.get<{
+        mfaRequired: boolean;
+        totpEnrolled: boolean;
+        entraEnabled: boolean;
+        adEnabled: boolean;
+        idpHint: string;
+      }>(`${API_BASE_URL}/v1/auth/login-options`, { params: { email } }),
     );
   }
 
-  private readTokens(): StoredTokens | null {
+  beginBroker(email: string, redirect = '/hosts'): void {
+    const path = this.safeApplicationPath(redirect);
+    this.navigate(
+      `${API_BASE_URL}/v1/auth/broker?email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(path)}`,
+    );
+  }
+
+  async beginLogin(
+    email: string,
+    password: string,
+    redirect = '/hosts',
+    totp = '',
+  ): Promise<string> {
+    this.error.set(null);
+    const path = this.safeApplicationPath(redirect);
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      return raw ? (JSON.parse(raw) as StoredTokens) : null;
-    } catch {
-      return null;
+      const session = await firstValueFrom(
+        this.http.post<SessionResponse>(
+          `${API_BASE_URL}/v1/auth/login`,
+          { email, password, totp, redirect: path },
+          { withCredentials: true },
+        ),
+      );
+      this.applySession(session);
+      return session.mfaEnrollmentRequired ? '/enrolar-mfa' : path;
+    } catch (error) {
+      this.clear();
+      if (error instanceof HttpErrorResponse) {
+        const message = error.error?.message;
+        throw new Error(typeof message === 'string' ? message : 'No fue posible iniciar sesión.');
+      }
+      throw error;
     }
+  }
+
+  async logout(): Promise<void> {
+    this.stopKeepAlive();
+    try {
+      const result = await firstValueFrom(
+        this.http.post<{ logoutUrl: string }>(
+          `${API_BASE_URL}/v1/auth/logout`,
+          {},
+          {
+            withCredentials: true,
+            headers: { 'X-CSRF-Token': this.csrf },
+          },
+        ),
+      );
+      this.clear();
+      this.navigate(result.logoutUrl);
+    } catch {
+      this.clear();
+      this.navigate('/login');
+    }
+  }
+
+  csrfToken(): string {
+    return this.csrf;
+  }
+
+  async refresh(): Promise<void> {
+    if (!this.authenticated() || this.refreshInFlight) return this.refreshInFlight ?? undefined;
+    this.refreshInFlight = this.loadSession()
+      .catch((error) => {
+        if (error instanceof HttpErrorResponse && error.status === 401) this.clear();
+      })
+      .finally(() => {
+        this.refreshInFlight = null;
+      });
+    return this.refreshInFlight;
+  }
+
+  private async loadSession(): Promise<void> {
+    const session = await firstValueFrom(
+      this.http.get<SessionResponse>(`${API_BASE_URL}/v1/auth/session`, {
+        withCredentials: true,
+      }),
+    );
+    this.applySession(session);
+    this.error.set(null);
+  }
+
+  async beginMfaSetup(): Promise<{ qrDataUrl: string; secret: string }> {
+    return firstValueFrom(
+      this.http.post<{ qrDataUrl: string; secret: string }>(
+        `${API_BASE_URL}/v1/auth/mfa/setup`,
+        {},
+        { withCredentials: true },
+      ),
+    );
+  }
+
+  async confirmMfa(totp: string): Promise<void> {
+    await firstValueFrom(
+      this.http.post(
+        `${API_BASE_URL}/v1/auth/mfa/confirm`,
+        { totp },
+        { withCredentials: true },
+      ),
+    );
+    this.mfaEnrollmentRequired.set(false);
+  }
+
+  private safeApplicationPath(value: string): string {
+    return value.startsWith('/') && !value.startsWith('//') ? value : '/hosts';
+  }
+
+  private navigate(url: string): void {
+    window.location.assign(url);
   }
 
   private clear(): void {
-    sessionStorage.removeItem(STORAGE_KEY);
+    this.stopKeepAlive();
+    this.csrf = '';
     this.authenticated.set(false);
+    this.mfaEnrollmentRequired.set(false);
     this.profile.set(null);
   }
 
-  private syncProfile(): void {
-    const parsed = this.keycloak.tokenParsed;
-    if (!parsed) {
-      this.profile.set(null);
-      return;
+  private applySession(session: SessionResponse): void {
+    this.profile.set(session.user);
+    this.csrf = session.csrfToken;
+    this.mfaEnrollmentRequired.set(session.mfaEnrollmentRequired === true);
+    this.authenticated.set(true);
+    this.startKeepAlive();
+  }
+
+  private registerLifecycleListeners(): void {
+    if (this.lifecycleListenersRegistered) return;
+    window.addEventListener('online', this.resumeKeepAlive);
+    document.addEventListener('visibilitychange', this.resumeKeepAlive);
+    this.lifecycleListenersRegistered = true;
+  }
+
+  private readonly resumeKeepAlive = (): void => {
+    if (this.authenticated() && (document.visibilityState === 'visible' || navigator.onLine)) {
+      void this.refresh();
     }
-    const roles = parsed.realm_access?.roles ?? [];
-    const role: AuthRole = roles.includes('operator')
-      ? 'operator'
-      : roles.includes('admin')
-        ? 'admin'
-        : 'viewer';
-    const email = String(parsed['email'] ?? parsed['preferred_username'] ?? '');
-    const name = [parsed['given_name'], parsed['family_name']].filter(Boolean).join(' ') || email;
-    this.profile.set({
-      email,
-      name,
-      tenant: String(parsed['tenant'] ?? 'default'),
-      role,
-    });
+  };
+
+  private startKeepAlive(): void {
+    this.stopKeepAlive();
+    if (this.authenticated()) {
+      this.keepAliveTimer = window.setInterval(() => void this.refresh(), KEEP_ALIVE_INTERVAL_MS);
+    }
+  }
+
+  private stopKeepAlive(): void {
+    if (this.keepAliveTimer === null) return;
+    window.clearInterval(this.keepAliveTimer);
+    this.keepAliveTimer = null;
   }
 }

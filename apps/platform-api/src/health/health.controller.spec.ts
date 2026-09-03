@@ -5,6 +5,7 @@ jest.mock('../prisma/prisma.service', () => ({
 import { Test, TestingModule } from '@nestjs/testing';
 import { HealthController } from './health.controller';
 import { PrismaService } from '../prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('HealthController', () => {
   let controller: HealthController;
@@ -19,6 +20,10 @@ describe('HealthController', () => {
             $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
           },
         },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue('1.0.0') },
+        },
       ],
     }).compile();
 
@@ -29,6 +34,7 @@ describe('HealthController', () => {
     expect(controller.liveness()).toEqual({
       status: 'ok',
       service: 'platform-api',
+      version: '1.0.0',
     });
   });
 
@@ -36,6 +42,7 @@ describe('HealthController', () => {
     await expect(controller.readiness()).resolves.toEqual({
       status: 'ready',
       service: 'platform-api',
+      version: '1.0.0',
     });
   });
 });

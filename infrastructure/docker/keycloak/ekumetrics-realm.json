@@ -6,8 +6,19 @@
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "passwordPolicy": "length(15) and maxLength(128) and notUsername(undefined)",
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 31536000,
+  "clientSessionIdleTimeout": 1800,
+  "clientSessionMaxLifespan": 31536000,
   "roles": {
     "realm": [
       { "name": "operator", "description": "Operador Gradotech" },
@@ -27,14 +38,14 @@
       "rootUrl": "http://localhost:4200",
       "baseUrl": "/",
       "redirectUris": [
-        "http://localhost:4200/*",
-        "http://127.0.0.1:4200/*",
-        "http://10.10.0.2:4200/*"
+        "http://localhost:3000/v1/auth/callback",
+        "http://127.0.0.1:3000/v1/auth/callback",
+        "http://10.10.0.2:3000/v1/auth/callback"
       ],
       "webOrigins": ["http://localhost:4200", "http://127.0.0.1:4200", "http://10.10.0.2:4200"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:4200/*##http://127.0.0.1:4200/*##http://10.10.0.2:4200/*"
+        "post.logout.redirect.uris": "http://localhost:4200/login##http://127.0.0.1:4200/login##http://10.10.0.2:4200/login"
       },
       "protocolMappers": [
         {
@@ -73,7 +84,9 @@
       "enabled": true,
       "firstName": "Operador",
       "lastName": "Gradotech",
-      "credentials": [{ "type": "password", "value": "ekumetrics", "temporary": false }],
+      "credentials": [
+        { "type": "password", "value": "ekumetrics-local", "temporary": false }
+      ],
       "realmRoles": ["operator"],
       "attributes": { "tenant": ["default"] }
     },
@@ -84,7 +97,9 @@
       "enabled": true,
       "firstName": "Admin",
       "lastName": "Gradotech",
-      "credentials": [{ "type": "password", "value": "ekumetrics", "temporary": false }],
+      "credentials": [
+        { "type": "password", "value": "ekumetrics-local", "temporary": false }
+      ],
       "realmRoles": ["admin"],
       "attributes": { "tenant": ["default"] }
     }

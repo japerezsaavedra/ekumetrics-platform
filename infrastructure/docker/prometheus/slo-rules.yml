@@ -1,0 +1,125 @@
+groups:
+  - name: ekumetrics-slo-recording
+    interval: 30s
+    rules:
+      - record: ekumetrics:api_availability:ratio_rate5m
+        expr: |
+          avg(avg_over_time(up{job="platform-api"}[5m]))
+          *
+          (1 - (
+            (sum(rate(ekumetrics_http_requests_total{route!~"/metrics|/health.*",status_code=~"5.."}[5m])) or vector(0))
+            /
+            clamp_min((sum(rate(ekumetrics_http_requests_total{route!~"/metrics|/health.*"}[5m])) or vector(0)), 0.000001)
+          ))
+      - record: ekumetrics:api_availability:ratio_rate30m
+        expr: |
+          avg(avg_over_time(up{job="platform-api"}[30m]))
+          *
+          (1 - (
+            (sum(rate(ekumetrics_http_requests_total{route!~"/metrics|/health.*",status_code=~"5.."}[30m])) or vector(0))
+            /
+            clamp_min((sum(rate(ekumetrics_http_requests_total{route!~"/metrics|/health.*"}[30m])) or vector(0)), 0.000001)
+          ))
+      - record: ekumetrics:api_availability:ratio_rate1h
+        expr: |
+          avg(avg_over_time(up{job="platform-api"}[1h]))
+          *
+          (1 - (
+            (sum(rate(ekumetrics_http_requests_total{route!~"/metrics|/health.*",status_code=~"5.."}[1h])) or vector(0))
+            /
+            clamp_min((sum(rate(ekumetrics_http_requests_total{route!~"/metrics|/health.*"}[1h])) or vector(0)), 0.000001)
+          ))
+      - record: ekumetrics:api_availability:ratio_rate6h
+        expr: |
+          avg(avg_over_time(up{job="platform-api"}[6h]))
+          *
+          (1 - (
+            (sum(rate(ekumetrics_http_requests_total{route!~"/metrics|/health.*",status_code=~"5.."}[6h])) or vector(0))
+            /
+            clamp_min((sum(rate(ekumetrics_http_requests_total{route!~"/metrics|/health.*"}[6h])) or vector(0)), 0.000001)
+          ))
+      - record: ekumetrics:api_availability:ratio_rate30d
+        expr: avg_over_time(ekumetrics:api_availability:ratio_rate5m[30d])
+      - record: ekumetrics:api_error_budget:consumed_ratio30d
+        expr: clamp_min((1 - ekumetrics:api_availability:ratio_rate30d) / (1 - 0.999), 0)
+      - record: ekumetrics:api_latency_under_500ms:ratio_rate5m
+        expr: |
+          sum(rate(ekumetrics_http_request_duration_seconds_bucket{route!~"/metrics|/health.*",le="0.5"}[5m]))
+          /
+          clamp_min(sum(rate(ekumetrics_http_request_duration_seconds_count{route!~"/metrics|/health.*"}[5m])), 0.000001)
+      - record: ekumetrics:api_latency_under_500ms:ratio_rate30d
+        expr: |
+          sum(rate(ekumetrics_http_request_duration_seconds_bucket{route!~"/metrics|/health.*",le="0.5"}[30d]))
+          /
+          clamp_min(sum(rate(ekumetrics_http_request_duration_seconds_count{route!~"/metrics|/health.*"}[30d])), 0.000001)
+      - record: ekumetrics:agents_fresh:ratio
+        expr: |
+          (
+            sum(ekumetrics_agents_fresh{window="5m"})
+            /
+            clamp_min(sum(ekumetrics_agents_total), 1)
+          )
+          and (sum(ekumetrics_agents_total) > 0)
+          or vector(1)
+      - record: ekumetrics:agents_fresh:ratio_avg30d
+        expr: avg_over_time(ekumetrics:agents_fresh:ratio[30d])
+
+  - name: ekumetrics-slo-alerts
+    interval: 30s
+    rules:
+      - alert: EkumetricsApiErrorBudgetFastBurn
+        expr: |
+          (1 - ekumetrics:api_availability:ratio_rate5m) > (14.4 * (1 - 0.999))
+          and
+          (1 - ekumetrics:api_availability:ratio_rate1h) > (14.4 * (1 - 0.999))
+        for: 5m
+        labels:
+          severity: critical
+          slo: api-availability
+        annotations:
+          summary: "La API consume rápidamente su presupuesto de error"
+          impact: "Los operadores, pantallas o agentes pueden perder acceso al producto."
+          runbook_url: "docs/operations.md#respuesta-a-alertas-slo"
+      - alert: EkumetricsApiErrorBudgetSlowBurn
+        expr: |
+          (1 - ekumetrics:api_availability:ratio_rate30m) > (6 * (1 - 0.999))
+          and
+          (1 - ekumetrics:api_availability:ratio_rate6h) > (6 * (1 - 0.999))
+        for: 15m
+        labels:
+          severity: warning
+          slo: api-availability
+        annotations:
+          summary: "La API mantiene un consumo elevado del presupuesto de error"
+          impact: "La disponibilidad mensual puede incumplir el objetivo de 99,9 %."
+          runbook_url: "docs/operations.md#respuesta-a-alertas-slo"
+      - alert: EkumetricsApiLatencySloViolation
+        expr: ekumetrics:api_latency_under_500ms:ratio_rate5m < 0.95
+        for: 15m
+        labels:
+          severity: warning
+          slo: api-latency
+        annotations:
+          summary: "Menos del 95 % de solicitudes termina antes de 500 ms"
+          impact: "El portal, kiosk y operaciones administrativas responden lentamente."
+          runbook_url: "docs/operations.md#respuesta-a-alertas-slo"
+      - alert: EkumetricsAgentFreshnessSloViolation
+        expr: ekumetrics:agents_fresh:ratio < 0.99 and ekumetrics_agents_total > 0
+        for: 10m
+        labels:
+          severity: critical
+          slo: ingest-freshness
+        annotations:
+          summary: "Más del 1 % de agentes lleva cinco minutos sin reportar"
+          impact: "Los dashboards pueden mostrar datos obsoletos o incompletos."
+          runbook_url: "docs/operations.md#respuesta-a-alertas-slo"
+      - alert: EkumetricsIngestStopped
+        expr: ekumetrics_last_ingest_age_seconds > 300 and ekumetrics_agents_total > 0
+        for: 5m
+        labels:
+          severity: critical
+          slo: ingest-freshness
+        annotations:
+          summary: "No se persisten eventos desde hace más de cinco minutos"
+          impact: "La flota completa puede haber perdido la ruta de ingesta."
+          runbook_url: "docs/operations.md#respuesta-a-alertas-slo"

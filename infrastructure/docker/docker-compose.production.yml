@@ -1,0 +1,166 @@
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: null
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    volumes:
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/postgres_password:/run/secrets/postgres_password:ro
+
+  grafana:
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: null
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SECURITY_ALLOW_EMBEDDING: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/grafana_admin_password:/run/secrets/grafana_admin_password:ro
+
+  keycloak-db:
+    image: postgres:18-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD_FILE: /run/secrets/keycloak_db_password
+    volumes:
+      - keycloak-postgres-data:/var/lib/postgresql
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/keycloak_db_password:/run/secrets/keycloak_db_password:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  keycloak:
+    build:
+      context: ./keycloak
+      dockerfile: Containerfile
+    image: ekumetrics-keycloak:26.7.2
+    command: ["start", "--optimized", "--import-realm"]
+    restart: unless-stopped
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: null
+      KC_DB_PASSWORD_FILE: /run/secrets/keycloak_db_password
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?Defina KEYCLOAK_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: null
+      KC_BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/keycloak_admin_password
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:?Defina KEYCLOAK_PUBLIC_URL}
+      KC_HOSTNAME_STRICT: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      PORTAL_PUBLIC_URL: ${PORTAL_PUBLIC_URL:?Defina PORTAL_PUBLIC_URL}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:?Defina API_PUBLIC_URL}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./keycloak/ekumetrics-production-realm.json:/opt/keycloak/data/import/ekumetrics-realm.json:ro
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/keycloak_db_password:/run/secrets/keycloak_db_password:ro
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/keycloak_admin_password:/run/secrets/keycloak_admin_password:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
+
+  platform-api:
+    environment:
+      DEPLOYMENT_MODE: production
+      CORS_ORIGIN: ${PORTAL_PUBLIC_URL:?Defina PORTAL_PUBLIC_URL}
+      PORTAL_PUBLIC_URL: ${PORTAL_PUBLIC_URL:?Defina PORTAL_PUBLIC_URL}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:?Defina API_PUBLIC_URL}
+      KEYCLOAK_URL: ${KEYCLOAK_PUBLIC_URL:?Defina KEYCLOAK_PUBLIC_URL}
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      DATABASE_URL: null
+      DATABASE_URL_FILE: /run/secrets/database_url
+      KEYCLOAK_ADMIN_PASSWORD: null
+      KEYCLOAK_ADMIN_PASSWORD_FILE: /run/secrets/keycloak_admin_password
+      INGEST_SHARED_KEY: null
+      INGEST_SHARED_KEY_FILE: /run/secrets/ingest_shared_key
+      AGENT_EDGE_ASSERTION_KEY: null
+      AGENT_EDGE_ASSERTION_KEY_FILE: /run/secrets/agent_edge_assertion_key
+      KIOSK_TOKEN_SECRET: null
+      KIOSK_TOKEN_SECRET_FILE: /run/secrets/kiosk_token_secret
+      BFF_SESSION_SECRET: null
+      BFF_SESSION_SECRET_FILE: /run/secrets/bff_session_secret
+      AI_SETTINGS_ENCRYPTION_KEY: null
+      AI_SETTINGS_ENCRYPTION_KEY_FILE: /run/secrets/ai_settings_encryption_key
+      HOLMES_UPSTREAM_KEY: null
+      HOLMES_UPSTREAM_KEY_FILE: /run/secrets/holmes_upstream_key
+    volumes:
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/database_url:/run/secrets/database_url:ro
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/keycloak_admin_password:/run/secrets/keycloak_admin_password:ro
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/ingest_shared_key:/run/secrets/ingest_shared_key:ro
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/agent_edge_assertion_key:/run/secrets/agent_edge_assertion_key:ro
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/kiosk_token_secret:/run/secrets/kiosk_token_secret:ro
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/bff_session_secret:/run/secrets/bff_session_secret:ro
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/ai_settings_encryption_key:/run/secrets/ai_settings_encryption_key:ro
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/holmes_upstream_key:/run/secrets/holmes_upstream_key:ro
+
+  ingest-gateway:
+    ports: !reset []
+    environment:
+      INGEST_SHARED_KEY: null
+      INGEST_SHARED_KEY_FILE: /run/secrets/ingest_shared_key
+    volumes:
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/ingest_shared_key:/run/secrets/ingest_shared_key:ro
+
+  otel-collector:
+    ports: !reset []
+
+  tempo:
+    ports: !reset []
+
+  agent-edge:
+    image: nginx:1.30.4-alpine
+    container_name: ekumetrics-agent-edge
+    restart: unless-stopped
+    environment:
+      INGEST_SHARED_KEY_FILE: /run/secrets/ingest_shared_key
+      AGENT_EDGE_ASSERTION_KEY_FILE: /run/secrets/agent_edge_assertion_key
+    ports:
+      - "${AGENT_EDGE_BIND_ADDR:?Defina AGENT_EDGE_BIND_ADDR}:${AGENT_GRPC_PORT:-4317}:4317"
+      - "${AGENT_EDGE_BIND_ADDR:?Defina AGENT_EDGE_BIND_ADDR}:${AGENT_HTTP_PORT:-4318}:4318"
+    volumes:
+      - ./agent-edge/15-load-secrets.envsh:/docker-entrypoint.d/15-load-secrets.envsh:ro
+      - ./agent-edge/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/ingest_shared_key:/run/secrets/ingest_shared_key:ro
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/agent_edge_assertion_key:/run/secrets/agent_edge_assertion_key:ro
+      - ${AGENT_TLS_DIR:?Defina AGENT_TLS_DIR}/ca.crt:/run/agent-tls/ca.crt:ro
+      - ${AGENT_TLS_DIR:?Defina AGENT_TLS_DIR}/server.crt:/run/agent-tls/server.crt:ro
+      - ${AGENT_TLS_DIR:?Defina AGENT_TLS_DIR}/server.key:/run/agent-tls/server.key:ro
+    depends_on:
+      platform-api:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  holmes:
+    environment:
+      OPENAI_API_KEY: null
+      OPENAI_API_KEY_FILE: /run/secrets/holmes_upstream_key
+    entrypoint: ["/bin/sh", "/opt/ekumetrics/load-secrets.sh"]
+    volumes:
+      - ./holmes/load-secrets.sh:/opt/ekumetrics/load-secrets.sh:ro
+      - ${SECRETS_DIR:?Defina SECRETS_DIR}/holmes_upstream_key:/run/secrets/holmes_upstream_key:ro
+
+  portal-web:
+    environment:
+      PORTAL_API_URL: ${API_PUBLIC_URL:?Defina API_PUBLIC_URL}
+      PORTAL_GRAFANA_URL: ${GRAFANA_PUBLIC_URL:?Defina GRAFANA_PUBLIC_URL}
+
+volumes:
+  keycloak-postgres-data:

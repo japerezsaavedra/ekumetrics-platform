@@ -1,0 +1,63 @@
+.kiosk-activation {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background: var(--eku-bg);
+}
+.kiosk-activation__card {
+  width: min(100%, 30rem);
+  padding: 2.5rem;
+  border: 1px solid var(--eku-border);
+  border-radius: 1.25rem;
+  background: var(--eku-surface);
+  box-shadow: var(--eku-shadow-lg);
+}
+h1 {
+  margin: 0 0 0.75rem;
+}
+
+p {
+  margin: 0;
+  color: var(--eku-text-secondary);
+  line-height: 1.5;
+}
+form,
+label {
+  display: grid;
+  gap: 0.5rem;
+}
+form {
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+input {
+  min-height: 2.75rem;
+  padding: 0 0.8rem;
+  border: 1px solid var(--eku-border);
+  border-radius: 0.55rem;
+  background: var(--eku-surface);
+  color: var(--eku-text);
+  font-family: inherit;
+}
+
+small {
+  color: var(--eku-text-secondary);
+}
+button {
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: var(--eku-primary);
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.kiosk-activation__error {
+  color: var(--eku-danger);
+  margin: 0;
+}

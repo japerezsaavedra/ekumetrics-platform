@@ -1,0 +1,137 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm install --global npm@12.0.2
+      - run: npm run release:check
+      - run: npm run asvs:check
+      - run: npm run preflight:test
+
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/platform-api
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/platform-api/package-lock.json
+      - run: npm install --global npm@12.0.2
+      - run: npm ci
+      - run: npx prisma validate
+      - run: npm run lint
+      - run: npm test -- --runInBand
+      - run: npm run test:e2e -- --runInBand
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+
+  rag-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/platform-api/package-lock.json
+      - run: npm install --global npm@12.0.2
+      - run: npm --prefix apps/platform-api ci
+      - name: Start vector database and embedding runtime
+        run: >-
+          docker compose
+          --env-file infrastructure/docker/.env.example
+          -f infrastructure/docker/docker-compose.yml
+          up -d --wait postgres ollama
+      - name: Pull pinned embedding model
+        run: docker exec ekumetrics-ollama ollama pull qwen3-embedding:0.6b
+      - name: Apply schema and enforce Spanish RAG thresholds
+        shell: bash
+        run: |
+          set -a
+          . infrastructure/docker/.env.example
+          set +a
+          export DATABASE_URL="postgresql://ekumetrics:${POSTGRES_PASSWORD}@127.0.0.1:5432/ekumetrics?schema=public"
+          export AI_EMBEDDING_URL="http://127.0.0.1:11434"
+          npm --prefix apps/platform-api run prisma:deploy
+          npm run rag:evaluate
+      - name: Stop RAG services
+        if: always()
+        run: >-
+          docker compose
+          --env-file infrastructure/docker/.env.example
+          -f infrastructure/docker/docker-compose.yml
+          down -v
+
+  portal:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/portal-web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/portal-web/package-lock.json
+      - run: npm install --global npm@12.0.2
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm test -- --watch=false
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Upload E2E failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: portal-e2e-${{ github.run_id }}
+          path: |
+            apps/portal-web/playwright-report
+            apps/portal-web/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+      - run: npm audit --omit=dev --audit-level=high
+
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker compose --env-file infrastructure/docker/.env.example -f infrastructure/docker/docker-compose.yml config --quiet
+      - run: docker compose --env-file infrastructure/docker/.env.example -f infrastructure/docker/docker-compose.yml build platform-api portal-web
+      - name: Test hardened Portal image
+        run: >-
+          docker run --rm
+          -v "$PWD/scripts/test-portal-container.sh:/tmp/test-portal-container.sh:ro"
+          ekumetrics-portal-web:1.0.0 sh /tmp/test-portal-container.sh
+      - name: Validate ingest gateway
+        run: >-
+          docker run --rm
+          --add-host platform-api:127.0.0.1
+          --add-host otel-collector:127.0.0.1
+          -v "$PWD/infrastructure/docker/ingest-gateway/default.conf.template:/etc/nginx/templates/default.conf.template:ro"
+          -e INGEST_SHARED_KEY=ci-validation-only
+          nginx:1.30.4-alpine nginx -t
+      - name: Test Agent mTLS edge
+        run: npm run security:test:mtls
+      - name: Test ingest end to end
+        run: bash scripts/test-ingest-e2e.sh
+      - name: Test real OIDC lifecycle
+        run: bash scripts/test-auth-e2e.sh

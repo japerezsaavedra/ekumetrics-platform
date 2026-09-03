@@ -1,0 +1,147 @@
+<section class="channels">
+  <eku-page-header
+    title="Canales de alerta"
+    [subtitle]="'Destinos de ' + tenantName() + '. Cada tenant recibe solo sus propias alertas.'"
+  >
+    @if (error(); as message) {
+      <eku-error-state [message]="message" />
+    }
+    <button
+      ekuActions
+      type="button"
+      class="eku-add"
+      (click)="formOpen() ? closeForm() : openCreate()"
+    >
+      {{ formOpen() ? 'Cancelar' : 'Agregar canal' }}
+    </button>
+  </eku-page-header>
+
+  @if (formOpen()) {
+    <form class="eku-form channels__form" [formGroup]="form" (ngSubmit)="submit()">
+      <label class="eku-field">
+        <span>Nombre</span>
+        <input type="text" formControlName="name" placeholder="ops-correo" />
+        <small>{{
+          fieldInvalid('name') ? '2 a 64 caracteres: letras, números, punto, guion o _.' : ''
+        }}</small>
+      </label>
+      <label class="eku-field">
+        <span>Tipo</span>
+        <select formControlName="type">
+          <option value="email">Correo</option>
+          <option value="slack">Slack</option>
+          <option value="webhook">Webhook</option>
+        </select>
+        <small></small>
+      </label>
+      <label class="eku-field">
+        <span>Estado</span>
+        <span class="channels__toggle">
+          <input type="checkbox" formControlName="enabled" />
+          Canal activo
+        </span>
+        <small></small>
+      </label>
+      <fieldset class="channels__severities">
+        <legend>Severidades</legend>
+        <label><input type="checkbox" formControlName="critical" /> Crítica</label>
+        <label><input type="checkbox" formControlName="warning" /> Advertencia</label>
+        <label><input type="checkbox" formControlName="info" /> Informativa</label>
+      </fieldset>
+      @if (form.controls.type.value === 'email') {
+        <label class="eku-field">
+          <span>Destinatario</span>
+          <input type="email" formControlName="to" placeholder="ops@cliente.com" />
+          <small>{{ fieldInvalid('to') ? 'Indique un correo válido.' : '' }}</small>
+        </label>
+        <label class="eku-field">
+          <span>Remitente</span>
+          <input type="email" formControlName="from" placeholder="alertas@ekumetrics.local" />
+          <small></small>
+        </label>
+        <label class="eku-field">
+          <span>SMTP (host:puerto)</span>
+          <input type="text" formControlName="smarthost" placeholder="smtp.cliente.com:587" />
+          <small>{{ fieldInvalid('smarthost') ? 'Indique el servidor SMTP.' : '' }}</small>
+        </label>
+        <label class="eku-field">
+          <span>Usuario SMTP</span>
+          <input type="text" formControlName="username" autocomplete="off" />
+          <small></small>
+        </label>
+        <label class="eku-field">
+          <span>Contraseña SMTP</span>
+          <input type="password" formControlName="password" autocomplete="new-password" />
+          <small></small>
+        </label>
+      }
+      @if (form.controls.type.value === 'slack') {
+        <label class="eku-field">
+          <span>Webhook de Slack</span>
+          <input
+            type="url"
+            formControlName="webhookUrl"
+            placeholder="https://hooks.slack.com/services/..."
+          />
+          <small>{{ fieldInvalid('webhookUrl') ? 'Indique la URL HTTPS del webhook.' : '' }}</small>
+        </label>
+        <label class="eku-field">
+          <span>Canal</span>
+          <input type="text" formControlName="slackChannel" placeholder="#alertas" />
+          <small></small>
+        </label>
+      }
+      @if (form.controls.type.value === 'webhook') {
+        <label class="eku-field">
+          <span>URL</span>
+          <input type="url" formControlName="url" placeholder="https://cliente.com/hooks/alertas" />
+          <small>{{ fieldInvalid('url') ? 'Indique una URL HTTPS.' : '' }}</small>
+        </label>
+        <label class="eku-field">
+          <span>Token (opcional)</span>
+          <input type="password" formControlName="token" autocomplete="new-password" />
+          <small></small>
+        </label>
+      }
+      <button type="submit" [disabled]="saving()">
+        {{ saving() ? 'Guardando…' : editingId() ? 'Guardar canal' : 'Crear canal' }}
+      </button>
+    </form>
+  }
+
+  @if (items().length === 0 && !formOpen()) {
+    <eku-empty-state
+      title="Sin canales"
+      message="Este tenant aún no tiene destinos. Agregue correo, Slack o webhook para recibir sus alertas."
+    />
+  } @else {
+    <div class="channels__list">
+      @for (channel of items(); track channel.id) {
+        <article class="channels__tile" [class.is-off]="!channel.enabled">
+          <header>
+            <strong>{{ channel.name }}</strong>
+            <span>{{ typeLabel(channel.type) }}</span>
+          </header>
+          <p>
+            {{ channel.enabled ? 'Activo' : 'Pausado' }}
+            ·
+            {{ channel.severities.map(severityLabel).join(', ') || 'Sin severidad' }}
+          </p>
+          <p>
+            @if (channel.type === 'email') {
+              {{ channel.to }} · {{ channel.smarthost }}
+            } @else if (channel.type === 'slack') {
+              {{ channel.slackChannel || 'Webhook de Slack' }}
+            } @else {
+              {{ channel.url }}
+            }
+          </p>
+          <div class="channels__actions">
+            <button type="button" class="eku-add" (click)="openEdit(channel)">Editar</button>
+            <button type="button" class="eku-add" (click)="remove(channel)">Eliminar</button>
+          </div>
+        </article>
+      }
+    </div>
+  }
+</section>

@@ -307,7 +307,10 @@ export function palette(): string[] {
   ];
 }
 
-export function volumeFromLines(lines: Array<{ ts: number }>): { points: SeriesPoint[]; stepMs: number } {
+export function volumeFromLines(lines: Array<{ ts: number }>): {
+  points: SeriesPoint[];
+  stepMs: number;
+} {
   if (lines.length === 0) {
     return { points: [], stepMs: 60_000 };
   }
@@ -361,7 +364,13 @@ export function areaOption(
     color: colors,
     animationDuration: 0,
     animationDurationUpdate: 0,
-    grid: { left: 48, right: 16, top: series.length > 1 ? 26 : 12, bottom: 26, containLabel: false },
+    grid: {
+      left: 48,
+      right: 16,
+      top: series.length > 1 ? 26 : 12,
+      bottom: 26,
+      containLabel: false,
+    },
     tooltip: {
       trigger: 'axis',
       backgroundColor: token('--eku-chart-tooltip-surface'),
@@ -423,7 +432,10 @@ export function areaOption(
   };
 }
 
-export function connectionsByProtocol(items: NamedSeries[], protocol: 'tcp' | 'other'): NamedSeries[] {
+export function connectionsByProtocol(
+  items: NamedSeries[],
+  protocol: 'tcp' | 'other',
+): NamedSeries[] {
   return items
     .filter((item) => {
       const name = item.state.toLowerCase();
@@ -455,7 +467,8 @@ export function diskDoughnutOption(
   totalBytes: number | null,
   usedRatio: number | null,
 ): EChartsOption {
-  const used = usedBytes ?? (usedRatio !== null && totalBytes ? usedRatio * totalBytes : usedRatio ?? 0);
+  const used =
+    usedBytes ?? (usedRatio !== null && totalBytes ? usedRatio * totalBytes : (usedRatio ?? 0));
   const total = totalBytes ?? (usedRatio !== null ? 1 : used);
   const free = Math.max(0, total - used);
   const ratio = total > 0 ? used / total : usedRatio;

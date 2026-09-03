@@ -3,10 +3,8 @@ import {
   Component,
   ViewEncapsulation,
   computed,
-  inject,
   input,
 } from '@angular/core';
-import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 
@@ -18,18 +16,16 @@ import { marked } from 'marked';
   encapsulation: ViewEncapsulation.None,
 })
 export class EkuMarkdownComponent {
-  private readonly sanitizer = inject(DomSanitizer);
   readonly text = input('');
 
-  protected readonly html = computed((): SafeHtml => {
+  protected readonly html = computed((): string => {
     const parsed = marked.parse(this.prepare(this.text()), {
       async: false,
       gfm: true,
       breaks: true,
     });
     const raw = typeof parsed === 'string' ? parsed : '';
-    const clean = DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } });
-    return this.sanitizer.bypassSecurityTrustHtml(clean);
+    return DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } });
   });
 
   private prepare(text: string): string {

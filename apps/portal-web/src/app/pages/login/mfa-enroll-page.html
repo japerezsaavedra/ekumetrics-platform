@@ -1,0 +1,44 @@
+<section class="login">
+  <aside class="login__brand">
+    <img class="login__logo" src="ekumetrics_logotipo_purple.svg" alt="Ekumetrics" />
+  </aside>
+
+  <div class="login__panel">
+    <button
+      type="button"
+      class="login__theme"
+      (click)="toggleTheme()"
+      [attr.aria-label]="isDark() ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'"
+    >
+      <mat-icon>{{ isDark() ? 'light_mode' : 'dark_mode' }}</mat-icon>
+    </button>
+
+    <article class="login__card">
+      <p class="login__eyebrow">Ekumetrics Platform</p>
+      <h2>Activar MFA</h2>
+      <p>
+        Escanee el código con su aplicación de autenticación e ingrese el código de 6 dígitos.
+        No saldrá de Ekumetrics.
+      </p>
+      @if (error(); as message) {
+        <eku-error-state [message]="message" />
+      }
+      @if (loading()) {
+        <p>Preparando el código QR…</p>
+      } @else if (qrDataUrl()) {
+        <img class="login__logo" [src]="qrDataUrl()" alt="Código QR para MFA" />
+        <p class="login__security">Código manual: {{ secret() }}</p>
+        <form class="eku-form login__form" [formGroup]="form" (ngSubmit)="confirm()">
+          <label class="eku-field">
+            <span>Código MFA</span>
+            <input type="text" formControlName="totp" inputmode="numeric" autocomplete="one-time-code" />
+            <small>{{ fieldInvalid() ? 'Indique el código de 6 dígitos.' : '' }}</small>
+          </label>
+          <button type="submit" class="login__submit" [disabled]="submitting()">
+            {{ submitting() ? 'Confirmando…' : 'Confirmar y continuar' }}
+          </button>
+        </form>
+      }
+    </article>
+  </div>
+</section>

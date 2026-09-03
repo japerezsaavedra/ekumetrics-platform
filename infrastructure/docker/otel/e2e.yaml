@@ -1,0 +1,28 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  transform/identity:
+    error_mode: propagate
+    metric_statements:
+      - context: datapoint
+        statements:
+          - set(datapoint.attributes["agent_id"], resource.attributes["agent.id"])
+          - set(datapoint.attributes["tenant_id"], resource.attributes["tenant.id"])
+          - set(datapoint.attributes["site_id"], resource.attributes["host.site"])
+  batch:
+    timeout: 200ms
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [transform/identity, batch]
+      exporters: [prometheus]

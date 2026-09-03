@@ -30,6 +30,20 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--eku-text-secondary) 45%, transparent) transparent;
+}
+
+.shell__aside-nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.shell__aside-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.shell__aside-nav::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--eku-text-secondary) 45%, transparent);
 }
 
 .shell__aside-footer {

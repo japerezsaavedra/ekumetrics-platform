@@ -8,57 +8,53 @@
     </a>
   </eku-page-header>
 
-  <h2 class="agent__section">Instaladores</h2>
-  <div class="agent__grid">
-    @for (card of cards(); track card.id) {
-      <article class="agent__card">
-        <div class="agent__card-top">
-          <div class="agent__os" aria-hidden="true">
-            <mat-icon>{{ card.icon }}</mat-icon>
-            <span>{{ card.badge }}</span>
-          </div>
-          <div class="agent__card-copy">
-            <h3>{{ card.title }}</h3>
-            <p>{{ card.hint }}</p>
-          </div>
-        </div>
-        <pre class="agent__command" [title]="card.command">{{ card.command }}</pre>
-        @if (card.asset; as file) {
-          <a class="agent__download" [href]="file.browser_download_url">
-            <mat-icon>download</mat-icon>
-            Descargar {{ formatSize(file.size) }}
-          </a>
-        } @else {
-          <a class="agent__download" [href]="releasesUrl" target="_blank" rel="noopener">
-            <mat-icon>download</mat-icon>
-            Ver en GitHub
-          </a>
-        }
-      </article>
-    }
-  </div>
+  <article class="agent__step">
+    <h2>1. Elige tu plataforma</h2>
+    <p>Seleccione la versión, el sistema y el paquete. El comando de instalación se actualiza solo.</p>
+    <form class="eku-form eku-form--3" [formGroup]="picker">
+      <label class="eku-field">
+        <span>Versión</span>
+        <select formControlName="version">
+          @for (item of versions(); track item) {
+            <option [value]="item">{{ item }}</option>
+          }
+        </select>
+      </label>
+      <label class="eku-field">
+        <span>Sistema</span>
+        <select formControlName="os">
+          <option value="linux">Linux x86_64</option>
+          <option value="windows">Windows Server x86_64</option>
+        </select>
+      </label>
+      <label class="eku-field">
+        <span>Distribución / paquete</span>
+        <select formControlName="distro">
+          @for (item of distros(); track item.id) {
+            <option [value]="item.id">{{ item.title }}</option>
+          }
+        </select>
+      </label>
+    </form>
+  </article>
 
-  @for (group of groups(); track group.id) {
-    <h2 class="agent__section agent__section--later">{{ group.label }}</h2>
-    <div class="agent__modules">
-      @for (item of group.modules; track item.key) {
-        <article class="agent__module">
-          <header class="agent__module-head">
-            <div class="agent__module-icon" aria-hidden="true">
-              <mat-icon>{{ item.icon }}</mat-icon>
-            </div>
-            <span
-              class="agent__dot"
-              [class.is-on]="item.on"
-              [attr.aria-label]="item.on ? 'Activo' : 'Inactivo'"
-              [attr.title]="item.on ? 'Activo' : 'Inactivo'"
-            ></span>
-          </header>
-          <h3>{{ item.name }}</h3>
-          <p class="agent__module-key">{{ item.key }}</p>
-          <p class="agent__module-cap">{{ item.capability }}</p>
-        </article>
+  @if (selected(); as choice) {
+    <article class="agent__step">
+      <h2>2. Comienza a usar el agente</h2>
+      <p>
+        {{ choice.hint }} · v{{ choice.version }}. El agente se instala en los hosts de la sede, no
+        en esta plataforma (eso es E-Platform).
+      </p>
+      <h3>Instalar</h3>
+      <pre class="agent__command">{{ choice.install }}</pre>
+      <h3>Comprobar</h3>
+      <pre class="agent__command">{{ choice.verify }}</pre>
+      @if (choice.asset; as file) {
+        <a class="agent__download" [href]="file.browser_download_url">
+          <mat-icon>download</mat-icon>
+          Descargar {{ file.name }} ({{ formatSize(file.size) }})
+        </a>
       }
-    </div>
+    </article>
   }
 </section>

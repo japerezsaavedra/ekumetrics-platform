@@ -2,6 +2,10 @@
 node_modules/
 dist/
 coverage/
+playwright-report/
+test-results/
+blob-report/
+artifacts/
 generated/
 .env
 .env.local
@@ -10,3 +14,9 @@ generated/
 .idea/
 .vscode/
 !apps/portal-web/.vscode/
+/.development/
+backups/
+restore-evidence/
+diagnostics/
+release-state/
+.env.production

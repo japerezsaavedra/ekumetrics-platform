@@ -1,0 +1,9 @@
+vulnerabilities:
+  - id: CVE-2025-59250
+    paths:
+      - opt/keycloak/lib/lib/main/com.microsoft.sqlserver.mssql-jdbc-13.2.1.jre11.jar
+    expired_at: 2026-09-30
+    statement: >-
+      Trivy 0.74.0 normaliza el POM interno a 13.2.1, pero el JAR es exactamente
+      el artefacto corregido 13.2.1.jre11 publicado en Maven Central (SHA-256
+      2d137aa308c78932878952fe3624ea090ecfe644414b8b23e71a305f425698c5).

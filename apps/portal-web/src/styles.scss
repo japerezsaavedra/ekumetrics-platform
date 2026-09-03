@@ -1,17 +1,17 @@
-@use "./styles/design-tokens";
-@use "./styles/typography";
-@use "./styles/density";
-@use "./styles/material-theme";
-@use "./styles/themes/light-theme";
-@use "./styles/themes/dark-theme";
-@use "./styles/utilities";
-@use "./styles/charts";
-@use "./styles/components/buttons";
-@use "./styles/components/cards";
-@use "./styles/components/dialogs";
-@use "./styles/components/forms";
-@use "./styles/components/navigation";
-@use "./styles/components/tables";
+@use './styles/design-tokens';
+@use './styles/typography';
+@use './styles/density';
+@use './styles/material-theme';
+@use './styles/themes/light-theme';
+@use './styles/themes/dark-theme';
+@use './styles/utilities';
+@use './styles/charts';
+@use './styles/components/buttons';
+@use './styles/components/cards';
+@use './styles/components/dialogs';
+@use './styles/components/forms';
+@use './styles/components/navigation';
+@use './styles/components/tables';
 
 html.eku-kiosk,
 html.eku-kiosk body,

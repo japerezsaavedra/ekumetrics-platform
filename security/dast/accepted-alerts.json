@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "acceptedAlerts": [
+    {
+      "pluginId": "10055",
+      "name": "CSP: style-src unsafe-inline",
+      "owner": "Ekumetrics Engineering",
+      "ticket": "EKM-10",
+      "expiresAt": "2026-12-31",
+      "rationale": "Angular Material y los indicadores de telemetría aplican estilos calculados en runtime. script-src permanece estricto y el HTML de EkuAssistant pasa por DOMPurify y por el sanitizador de Angular. La eliminación requiere nonces de CSP coordinados por request o reemplazar todos los estilos dinámicos."
+    },
+    {
+      "pluginId": "10110",
+      "name": "Dangerous JS Functions",
+      "owner": "Ekumetrics Engineering",
+      "ticket": "EKM-10",
+      "expiresAt": "2026-12-31",
+      "rationale": "Falso positivo por la definición de bypassSecurityTrustHtml incluida en @angular/platform-browser. El código de Ekumetrics no invoca métodos bypassSecurityTrust*; EkuAssistant sanitiza primero con DOMPurify y Angular vuelve a sanitizar el string al enlazar innerHTML."
+    }
+  ]
+}

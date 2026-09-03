@@ -5,11 +5,10 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth';
 import { ThemeService } from '../../core/theme';
 import { EkuErrorStateComponent } from '../../shared/eku/error-state/eku-error-state';
-import { differentFrom, passwordMatch } from '../../validators/password-match';
 
 @Component({
   selector: 'app-login-page',
-  imports: [ReactiveFormsModule, MatIcon, EkuErrorStateComponent],
+  imports: [MatIcon, ReactiveFormsModule, EkuErrorStateComponent],
   templateUrl: './login-page.html',
   styleUrl: './login-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -21,25 +20,28 @@ export class LoginPage {
   private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder);
   protected readonly submitting = signal(false);
-  protected readonly mustChange = signal(false);
+  protected readonly submitted = signal(false);
   protected readonly error = signal<string | null>(this.auth.error());
+  protected readonly mfaRequired = signal(false);
+  protected readonly totpEnrolled = signal(false);
+  protected readonly entraEnabled = signal(false);
+  protected readonly adEnabled = signal(false);
   protected readonly form = this.fb.nonNullable.group({
     email: ['operator@gradotech.com', [Validators.required, Validators.email]],
-    password: ['ekumetrics', [Validators.required, Validators.minLength(1)]],
+    password: ['ekumetrics-local', [Validators.required]],
+    totp: [''],
   });
-  protected readonly changeForm = this.fb.nonNullable.group(
-    {
-      currentPassword: [''],
-      newPassword: ['', [Validators.required, Validators.minLength(8), differentFrom('currentPassword')]],
-      confirmPassword: ['', [Validators.required]],
-    },
-    { validators: passwordMatch('newPassword', 'confirmPassword') },
-  );
 
   constructor() {
     if (this.auth.authenticated()) {
-      void this.router.navigateByUrl(this.redirect());
+      void this.router.navigateByUrl(
+        this.auth.mfaEnrollmentRequired() ? '/enrolar-mfa' : this.redirect(),
+      );
     }
+    this.form.controls.email.valueChanges.subscribe((email) => {
+      void this.refreshOptions(email);
+    });
+    void this.refreshOptions(this.form.controls.email.value);
   }
 
   protected isDark(): boolean {
@@ -50,79 +52,68 @@ export class LoginPage {
     this.theme.toggle();
   }
 
-  protected fieldInvalid(name: 'email' | 'password'): boolean {
+  protected fieldInvalid(name: 'email' | 'password' | 'totp'): boolean {
     const control = this.form.controls[name];
-    return control.invalid && (control.touched || control.dirty);
-  }
-
-  protected fieldHint(name: 'email' | 'password'): string {
-    if (!this.fieldInvalid(name)) {
-      return '';
-    }
-    return name === 'email' ? 'Ingrese un correo electrónico válido.' : 'Ingrese su contraseña.';
-  }
-
-  protected changeInvalid(name: 'newPassword' | 'confirmPassword'): boolean {
-    const control = this.changeForm.controls[name];
-    return (control.invalid || this.changeForm.hasError('passwordMatch')) && (control.touched || control.dirty);
-  }
-
-  protected changeHint(name: 'newPassword' | 'confirmPassword'): string {
-    const control = this.changeForm.controls[name];
-    if (!this.changeInvalid(name)) {
-      return '';
-    }
-    if (name === 'newPassword' && control.hasError('minlength')) {
-      return 'La contraseña debe tener al menos 8 caracteres.';
-    }
-    if (name === 'newPassword' && control.hasError('samePassword')) {
-      return 'La nueva contraseña debe ser distinta a la temporal.';
-    }
-    if (name === 'confirmPassword' || this.changeForm.hasError('passwordMatch')) {
-      return 'Las contraseñas no coinciden.';
-    }
-    return 'Ingrese la nueva contraseña.';
+    return control.invalid && (control.touched || this.submitted());
   }
 
   protected async enter(): Promise<void> {
+    this.submitted.set(true);
+    this.error.set(null);
+    this.syncTotpValidator();
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
     }
     this.submitting.set(true);
-    this.error.set(null);
     try {
-      const { email, password } = this.form.getRawValue();
-      const result = await this.auth.signIn(email, password);
-      if (result === 'change-password') {
-        this.changeForm.controls.currentPassword.setValue(password);
-        this.mustChange.set(true);
-        this.submitting.set(false);
-        return;
-      }
-      window.location.assign(this.redirect());
+      const { email, password, totp } = this.form.getRawValue();
+      const destination = await this.auth.beginLogin(email, password, this.redirect(), totp);
+      await this.router.navigateByUrl(destination);
     } catch (err) {
-      this.error.set(err instanceof Error ? err.message : 'Las credenciales no son válidas.');
+      this.error.set(err instanceof Error ? err.message : 'No fue posible iniciar sesión.');
       this.submitting.set(false);
     }
   }
 
-  protected async savePassword(): Promise<void> {
-    if (this.changeForm.invalid) {
-      this.changeForm.markAllAsTouched();
+  protected continueEntra(): void {
+    const email = this.form.controls.email.value;
+    if (this.form.controls.email.invalid) {
+      this.form.controls.email.markAsTouched();
       return;
     }
-    this.submitting.set(true);
-    this.error.set(null);
-    try {
-      const { email, password } = this.form.getRawValue();
-      const { newPassword, confirmPassword } = this.changeForm.getRawValue();
-      await this.auth.completeFirstPassword(email, password, newPassword, confirmPassword);
-      window.location.assign(this.redirect());
-    } catch (err) {
-      this.error.set(err instanceof Error ? err.message : 'No fue posible actualizar la contraseña.');
-      this.submitting.set(false);
+    this.auth.beginBroker(email, this.redirect());
+  }
+
+  private async refreshOptions(email: string): Promise<void> {
+    if (this.form.controls.email.invalid) {
+      this.mfaRequired.set(false);
+      this.totpEnrolled.set(false);
+      this.entraEnabled.set(false);
+      this.adEnabled.set(false);
+      this.syncTotpValidator();
+      return;
     }
+    try {
+      const options = await this.auth.loginOptions(email);
+      this.mfaRequired.set(options.mfaRequired);
+      this.totpEnrolled.set(options.totpEnrolled);
+      this.entraEnabled.set(options.entraEnabled);
+      this.adEnabled.set(options.adEnabled);
+    } catch {
+      this.mfaRequired.set(false);
+      this.totpEnrolled.set(false);
+      this.entraEnabled.set(false);
+      this.adEnabled.set(false);
+    }
+    this.syncTotpValidator();
+  }
+
+  private syncTotpValidator(): void {
+    this.form.controls.totp.setValidators(
+      this.mfaRequired() && this.totpEnrolled() ? [Validators.required] : [],
+    );
+    this.form.controls.totp.updateValueAndValidity({ emitEvent: false });
   }
 
   private redirect(): string {

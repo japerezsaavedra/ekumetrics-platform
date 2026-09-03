@@ -21,7 +21,13 @@ type AdminUser = {
 
 @Component({
   selector: 'app-admin-users-page',
-  imports: [ReactiveFormsModule, MatIcon, MatTooltip, EkuPageHeaderComponent, EkuErrorStateComponent],
+  imports: [
+    ReactiveFormsModule,
+    MatIcon,
+    MatTooltip,
+    EkuPageHeaderComponent,
+    EkuErrorStateComponent,
+  ],
   templateUrl: './admin-users-page.html',
   styleUrl: './admin-users-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -37,7 +43,12 @@ export class AdminUsersPage {
   protected readonly isOperator = this.tenants.isOperator;
   protected readonly formOpen = signal(false);
   protected readonly editingId = signal<string | null>(null);
-  protected readonly created = signal<{ email: string; temporaryPassword: string } | null>(null);
+  protected readonly created = signal<{
+    email: string;
+    temporaryPassword: string;
+    reset?: boolean;
+  } | null>(null);
+  protected readonly passwordVisible = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly saving = signal(false);
   protected readonly form = this.fb.nonNullable.group({
@@ -59,7 +70,9 @@ export class AdminUsersPage {
   }
 
   protected selectedDomain(): string {
-    const slug = this.isOperator() ? this.form.controls.tenantSlug.value : this.tenants.slug();
+    const slug = this.isOperator()
+      ? (this.form?.controls.tenantSlug.value ?? this.tenants.slug())
+      : this.tenants.slug();
     return this.tenantOptions().find((item) => item.slug === slug)?.emailDomain ?? '';
   }
 
@@ -78,6 +91,7 @@ export class AdminUsersPage {
     this.editingId.set(null);
     this.error.set(null);
     this.created.set(null);
+    this.passwordVisible.set(false);
     this.form.controls.email.enable();
     this.form.controls.tenantSlug.enable();
     this.form.reset({
@@ -93,6 +107,7 @@ export class AdminUsersPage {
     this.editingId.set(item.id);
     this.error.set(null);
     this.created.set(null);
+    this.passwordVisible.set(false);
     this.form.reset({
       tenantSlug: item.tenant.slug,
       displayName: item.displayName,
@@ -103,6 +118,27 @@ export class AdminUsersPage {
     this.form.controls.tenantSlug.disable();
   }
 
+  protected resetPassword(item: AdminUser): void {
+    if (!window.confirm(`¿Generar una nueva clave para ${item.displayName}?`)) {
+      return;
+    }
+    this.error.set(null);
+    this.http
+      .post<{ email: string; temporaryPassword: string }>(
+        `${API_BASE_URL}/v1/admin/users/${item.id}/reset-password?as=${this.tenants.slug()}`,
+        {},
+      )
+      .subscribe({
+        next: (account) => {
+          this.passwordVisible.set(false);
+          this.created.set({ ...account, reset: true });
+        },
+        error: (err: { error?: { message?: string } }) => {
+          this.error.set(err.error?.message ?? 'No se pudo restablecer la clave.');
+        },
+      });
+  }
+
   protected remove(item: AdminUser): void {
     if (item.email === this.auth.email()) {
       this.error.set('No puede eliminar su propia cuenta.');
@@ -111,18 +147,20 @@ export class AdminUsersPage {
     if (!window.confirm(`¿Eliminar a ${item.displayName}?`)) {
       return;
     }
-    this.http.delete(`${API_BASE_URL}/v1/admin/users/${item.id}?as=${this.tenants.slug()}`).subscribe({
-      next: () => {
-        if (this.editingId() === item.id) {
-          this.toggleForm();
-          this.formOpen.set(false);
-        }
-        this.reload();
-      },
-      error: (err: { error?: { message?: string } }) => {
-        this.error.set(err.error?.message ?? 'No se pudo eliminar el usuario.');
-      },
-    });
+    this.http
+      .delete(`${API_BASE_URL}/v1/admin/users/${item.id}?as=${this.tenants.slug()}`)
+      .subscribe({
+        next: () => {
+          if (this.editingId() === item.id) {
+            this.toggleForm();
+            this.formOpen.set(false);
+          }
+          this.reload();
+        },
+        error: (err: { error?: { message?: string } }) => {
+          this.error.set(err.error?.message ?? 'No se pudo eliminar el usuario.');
+        },
+      });
   }
 
   protected submit(): void {
@@ -136,10 +174,13 @@ export class AdminUsersPage {
     const tenantSlug = this.isOperator() ? value.tenantSlug : this.tenants.slug();
     const editingId = this.editingId();
     const request = editingId
-      ? this.http.patch<AdminUser>(`${API_BASE_URL}/v1/admin/users/${editingId}?as=${this.tenants.slug()}`, {
-          displayName: value.displayName,
-          role: value.role,
-        })
+      ? this.http.patch<AdminUser>(
+          `${API_BASE_URL}/v1/admin/users/${editingId}?as=${this.tenants.slug()}`,
+          {
+            displayName: value.displayName,
+            role: value.role,
+          },
+        )
       : this.http.post<AdminUser>(`${API_BASE_URL}/v1/admin/users?as=${this.tenants.slug()}`, {
           ...value,
           tenantSlug,
@@ -167,17 +208,22 @@ export class AdminUsersPage {
       },
       error: (err: { error?: { message?: string } }) => {
         this.saving.set(false);
-        this.error.set(err.error?.message ?? (editingId ? 'No se pudo guardar el usuario.' : 'No se pudo crear el usuario.'));
+        this.error.set(
+          err.error?.message ??
+            (editingId ? 'No se pudo guardar el usuario.' : 'No se pudo crear el usuario.'),
+        );
       },
     });
   }
 
   private reload(): void {
-    this.http.get<AdminUser[]>(`${API_BASE_URL}/v1/admin/users?as=${this.tenants.slug()}`).subscribe({
-      next: (users) => this.items.set(users),
-      error: (err: { error?: { message?: string } }) => {
-        this.error.set(err.error?.message ?? 'No se pudieron cargar los usuarios.');
-      },
-    });
+    this.http
+      .get<AdminUser[]>(`${API_BASE_URL}/v1/admin/users?as=${this.tenants.slug()}`)
+      .subscribe({
+        next: (users) => this.items.set(users),
+        error: (err: { error?: { message?: string } }) => {
+          this.error.set(err.error?.message ?? 'No se pudieron cargar los usuarios.');
+        },
+      });
   }
 }

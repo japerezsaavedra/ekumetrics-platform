@@ -1,7 +1,11 @@
 <section class="admin-sites">
   <eku-page-header
     title="Sitios"
-    [subtitle]="'Sedes de ' + tenantSlug() + '. El slug debe coincidir con agent.site. Un servidor se inscribe como tipo Servidor.'"
+    [subtitle]="
+      'Sedes de ' +
+      tenantSlug() +
+      '. El slug debe coincidir con agent.site. Un servidor se inscribe como tipo Servidor.'
+    "
   >
     <div ekuActions class="admin-sites__actions">
       <button type="button" class="eku-add" (click)="toggleSite()">
@@ -9,6 +13,9 @@
       </button>
       <button type="button" class="eku-add" (click)="toggleAgent()">
         {{ agentOpen() ? 'Cancelar' : 'Agregar agente' }}
+      </button>
+      <button type="button" class="eku-add" (click)="toggleKiosk()">
+        {{ kioskOpen() ? 'Cancelar' : 'Agregar pantalla' }}
       </button>
     </div>
   </eku-page-header>
@@ -23,7 +30,9 @@
       <label class="eku-field">
         <span>Slug (agent.site)</span>
         <input type="text" formControlName="slug" placeholder="planta-norte" />
-        <small>{{ fieldInvalid('site', 'slug') ? 'Solo minusculas, numeros, punto, guion o _.' : '' }}</small>
+        <small>{{
+          fieldInvalid('site', 'slug') ? 'Solo minusculas, numeros, punto, guion o _.' : ''
+        }}</small>
       </label>
       <button type="submit" [disabled]="saving()">
         {{ saving() ? 'Guardando…' : editingSiteId() ? 'Guardar sitio' : 'Crear sitio' }}
@@ -36,7 +45,9 @@
       <label class="eku-field">
         <span>agentId</span>
         <input type="text" formControlName="agentId" placeholder="agent-planta-norte-01" />
-        <small>{{ fieldInvalid('agent', 'agentId') ? 'Obligatorio. Letras, numeros, punto, guion o _.' : '' }}</small>
+        <small>{{
+          fieldInvalid('agent', 'agentId') ? 'Obligatorio. Letras, numeros, punto, guion o _.' : ''
+        }}</small>
       </label>
       <label class="eku-field">
         <span>Sitio</span>
@@ -75,13 +86,50 @@
     </form>
   }
 
+  @if (kioskOpen()) {
+    <form class="eku-form eku-form--3" [formGroup]="kioskForm" (ngSubmit)="submitKiosk()">
+      <label class="eku-field">
+        <span>Nombre</span>
+        <input type="text" formControlName="name" placeholder="TV sala de control" />
+        <small>Cómo se llama esta TV.</small>
+      </label>
+      <label class="eku-field">
+        <span>Sitio</span>
+        <select formControlName="site">
+          @for (item of items(); track item.id) {
+            <option [value]="item.slug">{{ item.name }}</option>
+          }
+        </select>
+        <small>Dónde está la TV.</small>
+      </label>
+      <label class="eku-field">
+        <span>Dashboard</span>
+        <select formControlName="dashboard">
+          @if (dashboards().length === 0) {
+            <option value="">Cree un dashboard primero</option>
+          }
+          @for (item of dashboards(); track item.value) {
+            <option [value]="item.value">{{ item.label }}</option>
+          }
+        </select>
+        <small>Qué se ve en esa TV. Los dashboards de Dashboards aparecen aquí.</small>
+      </label>
+      <button type="submit" [disabled]="saving() || dashboards().length === 0">
+        {{ saving() ? 'Creando…' : 'Crear pantalla' }}
+      </button>
+    </form>
+  }
+
   @if (error(); as message) {
     <eku-error-state [message]="message" />
   }
 
   @if (enrolled(); as item) {
     <article class="admin-sites__ready">
-      <p>Agente {{ item.agentId }} inscrito. Descargue agent.yaml y colóquelo en /etc/ekumetrics-agent/.</p>
+      <p>
+        Agente {{ item.agentId }} inscrito. Descargue agent.yaml y colóquelo en
+        /etc/ekumetrics-agent/.
+      </p>
       <button
         type="button"
         class="admin-sites__download"
@@ -91,6 +139,37 @@
         aria-label="Descargar agent.yaml"
       >
         <mat-icon>download</mat-icon>
+      </button>
+    </article>
+  }
+
+  @if (kioskCredential(); as device) {
+    <article class="admin-sites__ready admin-sites__credential">
+      <div>
+        <strong>Credencial lista para {{ device.name }}</strong>
+        <p>Se muestra una sola vez. Cópiela y ábrala en la pantalla.</p>
+        <code>URL: {{ kioskActivationUrl(device) }}</code>
+        <code>ID: {{ device.id }}</code>
+        <span class="admin-sites__secret">
+          <code>Credencial: {{ kioskSecretVisible() ? device.secret : '••••••••••••••••••••••••••••••••' }}</code>
+          <button
+            type="button"
+            class="eku-icon-btn"
+            (click)="kioskSecretVisible.set(!kioskSecretVisible())"
+            [attr.aria-label]="kioskSecretVisible() ? 'Ocultar credencial' : 'Mostrar credencial'"
+            [matTooltip]="kioskSecretVisible() ? 'Ocultar' : 'Mostrar'"
+          >
+            <mat-icon>{{ kioskSecretVisible() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+        </span>
+      </div>
+      <button
+        type="button"
+        class="admin-sites__download"
+        (click)="copyKioskCredential(device)"
+        aria-label="Copiar credencial"
+      >
+        <mat-icon>content_copy</mat-icon>
       </button>
     </article>
   }
@@ -110,10 +189,22 @@
         <span>{{ item.slug }}</span>
         <span>{{ item.agentCount ?? 0 }}</span>
         <span class="eku-grid-table__actions">
-          <button type="button" class="eku-icon-btn" matTooltip="Editar" (click)="editSite(item)" aria-label="Editar sitio">
+          <button
+            type="button"
+            class="eku-icon-btn"
+            matTooltip="Editar"
+            (click)="editSite(item)"
+            aria-label="Editar sitio"
+          >
             <mat-icon>edit</mat-icon>
           </button>
-          <button type="button" class="eku-icon-btn eku-icon-btn--danger" matTooltip="Eliminar" (click)="removeSite(item)" aria-label="Eliminar sitio">
+          <button
+            type="button"
+            class="eku-icon-btn eku-icon-btn--danger"
+            matTooltip="Eliminar"
+            (click)="removeSite(item)"
+            aria-label="Eliminar sitio"
+          >
             <mat-icon>delete</mat-icon>
           </button>
         </span>
@@ -138,19 +229,82 @@
         <span>{{ item.siteId }}</span>
         <span>{{ modeLabel(item.mode) }}</span>
         <span class="eku-grid-table__actions">
-          <button type="button" class="eku-icon-btn" matTooltip="Descargar agent.yaml" (click)="downloadYaml(item)" aria-label="Descargar agent.yaml">
+          <button
+            type="button"
+            class="eku-icon-btn"
+            matTooltip="Descargar agent.yaml"
+            (click)="downloadYaml(item)"
+            aria-label="Descargar agent.yaml"
+          >
             <mat-icon>download</mat-icon>
           </button>
-          <button type="button" class="eku-icon-btn" matTooltip="Editar" (click)="editAgent(item)" aria-label="Editar agente">
+          <button
+            type="button"
+            class="eku-icon-btn"
+            matTooltip="Editar"
+            (click)="editAgent(item)"
+            aria-label="Editar agente"
+          >
             <mat-icon>edit</mat-icon>
           </button>
-          <button type="button" class="eku-icon-btn eku-icon-btn--danger" matTooltip="Eliminar" (click)="removeAgent(item)" aria-label="Eliminar agente">
+          <button
+            type="button"
+            class="eku-icon-btn eku-icon-btn--danger"
+            matTooltip="Eliminar"
+            (click)="removeAgent(item)"
+            aria-label="Eliminar agente"
+          >
             <mat-icon>delete</mat-icon>
           </button>
         </span>
       </div>
     } @empty {
       <p class="eku-grid-table__empty">Este tenant aun no tiene agentes.</p>
+    }
+  </div>
+
+  <h2 class="admin-sites__section-title">Pantallas</h2>
+  <p class="admin-sites__section-copy">
+    Cada fila es una TV. Al crearla aparecen URL, ID y credencial para abrirla en
+    /kiosk/activar.
+  </p>
+  <div class="eku-grid-table admin-sites__agents">
+    <div class="eku-grid-table__row eku-grid-table__row--5 eku-grid-table__row--head">
+      <span>Nombre</span><span>Sitio</span><span>Dashboard</span><span>Estado</span><span></span>
+    </div>
+    @for (device of kiosks(); track device.id) {
+      <div class="eku-grid-table__row eku-grid-table__row--5">
+        <span class="eku-grid-table__who">
+          <strong>{{ device.name }}</strong>
+        </span>
+        <span>{{ kioskSiteName(device) }}</span>
+        <span>{{ kioskDashboardName(device) }}</span>
+        <span>{{ kioskStatus(device) }}</span>
+        <span class="eku-grid-table__actions">
+          @if (!device.revokedAt) {
+            <button
+              type="button"
+              class="eku-icon-btn"
+              matTooltip="Nueva credencial"
+              (click)="rotateKiosk(device)"
+              aria-label="Nueva credencial"
+            >
+              <mat-icon>key</mat-icon>
+            </button>
+          }
+          <button
+            type="button"
+            class="eku-icon-btn eku-icon-btn--danger"
+            matTooltip="Eliminar"
+            (click)="removeKiosk(device)"
+            aria-label="Eliminar pantalla"
+          >
+            <mat-icon>delete</mat-icon>
+          </button>
+        </span>
+      </div>
+    } @empty {
+      <p class="eku-grid-table__empty">Aún no hay pantallas. Cree una y asígnele un dashboard.</p>
     }
   </div>
 </section>

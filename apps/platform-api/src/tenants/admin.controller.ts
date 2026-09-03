@@ -1,8 +1,20 @@
-import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { actingTenant } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user';
 import type { AuthUser } from '../auth/auth.types';
 import { TenantsService } from './tenants.service';
+import { Roles } from '../auth/roles';
+import { AuditAction } from '../auth/audit-action';
 
 type UserBody = {
   tenantSlug?: string;
@@ -12,6 +24,7 @@ type UserBody = {
 };
 
 @Controller('v1/admin')
+@Roles('operator', 'admin')
 export class AdminController {
   constructor(private readonly tenants: TenantsService) {}
 
@@ -25,6 +38,7 @@ export class AdminController {
   }
 
   @Post('users')
+  @AuditAction('tenant.user.created', 'user')
   addUser(
     @CurrentUser() user: AuthUser,
     @Body() body: UserBody,
@@ -41,6 +55,7 @@ export class AdminController {
   }
 
   @Patch('users/:id')
+  @AuditAction('tenant.user.updated', 'user')
   updateUser(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
@@ -48,16 +63,37 @@ export class AdminController {
     @Query('as') asSlug?: string,
     @Headers('x-eku-tenant') headerSlug?: string,
   ) {
-    return this.tenants.updateUser(actingTenant(user, asSlug || headerSlug), id, body.displayName, body.role);
+    return this.tenants.updateUser(
+      actingTenant(user, asSlug || headerSlug),
+      id,
+      body.displayName,
+      body.role,
+    );
+  }
+
+  @Post('users/:id/reset-password')
+  @AuditAction('tenant.user.password_reset', 'user')
+  resetUserPassword(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Query('as') asSlug?: string,
+    @Headers('x-eku-tenant') headerSlug?: string,
+  ) {
+    return this.tenants.resetUserPassword(actingTenant(user, asSlug || headerSlug), id);
   }
 
   @Delete('users/:id')
+  @AuditAction('tenant.user.deleted', 'user')
   removeUser(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Query('as') asSlug?: string,
     @Headers('x-eku-tenant') headerSlug?: string,
   ) {
-    return this.tenants.removeUser(actingTenant(user, asSlug || headerSlug), user.email, id);
+    return this.tenants.removeUser(
+      actingTenant(user, asSlug || headerSlug),
+      user.email,
+      id,
+    );
   }
 }

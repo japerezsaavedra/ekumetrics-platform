@@ -4,6 +4,12 @@ jest.mock('../src/prisma/prisma.service', () => ({
     $disconnect = jest.fn();
   },
 }));
+jest.mock('../src/auth/auth.service', () => ({
+  AuthService: class AuthService {},
+}));
+jest.mock('../src/kiosk/kiosk.service', () => ({
+  KioskService: class KioskService {},
+}));
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
@@ -23,11 +29,14 @@ describe('Health (e2e)', () => {
     await app.init();
   });
 
-  it('/health (GET)', () => {
-    return request(app.getHttpServer())
+  it('/health (GET)', async () => {
+    const response = await request(app.getHttpServer())
       .get('/health')
-      .expect(200)
-      .expect({ status: 'ok', service: 'platform-api' });
+      .expect(200);
+
+    const body = response.body as unknown;
+    expect(body).toMatchObject({ status: 'ok', service: 'platform-api' });
+    expect((body as { version: unknown }).version).toEqual(expect.any(String));
   });
 
   afterEach(async () => {

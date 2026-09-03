@@ -1,0 +1,22 @@
+<section class="board-view" [class.is-kiosk]="kioskOn()">
+  @if (!kioskOn()) {
+    <eku-page-header [title]="view()?.board.name || 'Dashboard'">
+      <div ekuActions class="board-actions">
+        <a routerLink="/dashboards" class="eku-add">Lista</a>
+        <a [routerLink]="['/dashboards', boardId]" class="eku-add">Editar</a>
+      </div>
+    </eku-page-header>
+  }
+
+  @if (error(); as message) {
+    <eku-error-state [message]="message" />
+  }
+
+  <app-board-preview-grid
+    [widgets]="widgets()"
+    [hosts]="view()?.hosts ?? []"
+    [nics]="view()?.nics ?? []"
+    [series]="view()?.series ?? {}"
+    emptyMessage="Agregue componentes en el editor."
+  />
+</section>

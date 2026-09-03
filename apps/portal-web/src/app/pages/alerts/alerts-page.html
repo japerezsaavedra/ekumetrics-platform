@@ -1,0 +1,260 @@
+<section class="alerts">
+  <eku-page-header title="Alertas">
+    @if (error(); as message) {
+      <eku-error-state [message]="message" />
+    } @else if (loading()) {
+      <p>Cargando alertas…</p>
+    } @else {
+      <p>{{ inventoryHint() }}</p>
+    }
+    <button ekuActions type="button" class="eku-add" (click)="refresh()" [disabled]="refreshing()">
+      {{ refreshing() ? 'Actualizando…' : 'Actualizar' }}
+    </button>
+  </eku-page-header>
+
+  @if (loading()) {
+    <eku-loading-skeleton label="Cargando alertas" [bars]="5" />
+  } @else {
+    <div class="alerts__kpis" aria-label="Resumen de alertas">
+      <button
+        type="button"
+        class="alerts__kpi"
+        [class.is-on]="severityControl.value === 'all'"
+        (click)="setSeverity('all')"
+      >
+        <header>
+          <span class="alerts__kpi-title">
+            <mat-icon aria-hidden="true">notifications_active</mat-icon>
+            Activas
+          </span>
+          <span class="alerts__chip">Todas</span>
+        </header>
+        <strong>{{ alerts().length }}</strong>
+      </button>
+      <button
+        type="button"
+        class="alerts__kpi"
+        [class.is-crit]="criticalCount() > 0"
+        [class.is-on]="severityControl.value === 'critical'"
+        (click)="setSeverity('critical')"
+      >
+        <header>
+          <span class="alerts__kpi-title">
+            <mat-icon aria-hidden="true">error</mat-icon>
+            Críticas
+          </span>
+          <span class="alerts__chip">{{ criticalCount() > 0 ? 'Atención' : 'En calma' }}</span>
+        </header>
+        <strong>{{ criticalCount() }}</strong>
+      </button>
+      <button
+        type="button"
+        class="alerts__kpi"
+        [class.is-warn]="warningCount() > 0"
+        [class.is-on]="severityControl.value === 'warning'"
+        (click)="setSeverity('warning')"
+      >
+        <header>
+          <span class="alerts__kpi-title">
+            <mat-icon aria-hidden="true">warning</mat-icon>
+            Advertencias
+          </span>
+          <span class="alerts__chip">{{ warningCount() > 0 ? 'Revisar' : 'En calma' }}</span>
+        </header>
+        <strong>{{ warningCount() }}</strong>
+      </button>
+      <button
+        type="button"
+        class="alerts__kpi"
+        [class.is-on]="severityControl.value === 'silenced'"
+        (click)="setSeverity('silenced')"
+      >
+        <header>
+          <span class="alerts__kpi-title">
+            <mat-icon aria-hidden="true">notifications_off</mat-icon>
+            Silenciadas
+          </span>
+          <span class="alerts__chip">Filtro</span>
+        </header>
+        <strong>{{ silencedCount() }}</strong>
+      </button>
+    </div>
+
+    <div class="alerts__toolbar">
+      <label class="eku-field">
+        <span>Severidad</span>
+        <select [formControl]="severityControl">
+          <option value="all">Todas</option>
+          <option value="critical">Críticas</option>
+          <option value="warning">Advertencias</option>
+          <option value="info">Informativas</option>
+          <option value="unknown">Sin clasificar</option>
+          <option value="silenced">Silenciadas</option>
+        </select>
+        <small></small>
+      </label>
+    </div>
+
+    @if (selectedAlert(); as alert) {
+      <form class="eku-form alerts__form" [formGroup]="silenceForm" (ngSubmit)="createSilence()">
+        <div class="alerts__form-head">
+          <div>
+            <span>Nuevo silencio</span>
+            <strong>{{ alert.name }}</strong>
+            <p>{{ matcherLabel(selectedMatchers()) }}</p>
+          </div>
+          <button type="button" class="eku-add" (click)="closeSilence()">Cancelar</button>
+        </div>
+        <label class="eku-field">
+          <span>Duración</span>
+          <select formControlName="durationMinutes">
+            <option value="30">30 minutos</option>
+            <option value="60">1 hora</option>
+            <option value="240">4 horas</option>
+            <option value="1440">24 horas</option>
+            <option value="10080">7 días</option>
+          </select>
+          <small></small>
+        </label>
+        <label class="eku-field">
+          <span>Motivo</span>
+          <input
+            type="text"
+            formControlName="comment"
+            maxlength="500"
+            placeholder="Mantenimiento aprobado EKM-123"
+          />
+          <small>
+            @if (silenceForm.controls.comment.invalid && silenceForm.controls.comment.touched) {
+              Indique un motivo de al menos 5 caracteres.
+            }
+          </small>
+        </label>
+        <button type="submit" [disabled]="saving()">
+          {{ saving() ? 'Creando silencio…' : 'Crear silencio temporal' }}
+        </button>
+      </form>
+    }
+
+    <section class="alerts__section">
+      <header class="alerts__section-head">
+        <h2>Alertas</h2>
+        <span>{{ visibleAlerts().length }}</span>
+      </header>
+
+      @if (visibleAlerts().length === 0) {
+        <eku-empty-state
+          title="Sin alertas"
+          message="No hay alertas para el filtro seleccionado."
+        />
+      } @else {
+        <div class="alerts__list">
+          @for (alert of visibleAlerts(); track alert.fingerprint) {
+            <article
+              class="alerts__tile"
+              [class.is-open]="selectedAlert()?.fingerprint === alert.fingerprint"
+              [class.is-silenced]="alert.silencedBy.length > 0"
+            >
+              <header>
+                <span class="alerts__kpi-title">
+                  <mat-icon aria-hidden="true">{{
+                    alert.severity === 'critical'
+                      ? 'error'
+                      : alert.severity === 'warning'
+                        ? 'warning'
+                        : 'notifications'
+                  }}</mat-icon>
+                  {{ alert.name }}
+                </span>
+                <span class="alerts__chip" [attr.data-severity]="alert.severity">
+                  {{ severityLabel(alert.severity) }}
+                </span>
+              </header>
+              <p>{{ summary(alert) }}</p>
+              <div class="alerts__metrics">
+                <span>
+                  <b>{{ formatDate(alert.startsAt) }}</b>
+                  activa desde
+                </span>
+                <span>
+                  <b>{{
+                    alert.silencedBy.length > 0
+                      ? 'Silenciada'
+                      : alert.inhibitedBy.length > 0
+                        ? 'Inhibida'
+                        : 'Activa'
+                  }}</b>
+                  estado
+                </span>
+                <span>
+                  <b>{{ impact(alert) || '—' }}</b>
+                  impacto
+                </span>
+              </div>
+              @if ((alert.labels | keyvalue).length) {
+                <div class="alerts__labels">
+                  @for (label of alert.labels | keyvalue; track label.key) {
+                    <span>{{ label.key }}={{ label.value }}</span>
+                  }
+                </div>
+              }
+              <div class="alerts__tile-actions">
+                <button type="button" class="eku-add" (click)="openSilence(alert)">
+                  Silenciar
+                </button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="alerts__section">
+      <header class="alerts__section-head">
+        <h2>Silencios</h2>
+        <span>{{ activeSilences().length }}</span>
+      </header>
+
+      @if (activeSilences().length === 0) {
+        <eku-empty-state
+          title="Sin silencios"
+          message="No hay ventanas de mantenimiento vigentes."
+        />
+      } @else {
+        <div class="alerts__list">
+          @for (silence of activeSilences(); track silence.id) {
+            <article class="alerts__tile">
+              <header>
+                <span class="alerts__kpi-title">
+                  <mat-icon aria-hidden="true">notifications_off</mat-icon>
+                  {{ silence.comment }}
+                </span>
+                <span class="alerts__chip">{{ silenceStatus(silence.status) }}</span>
+              </header>
+              <p>{{ matcherLabel(silence.matchers) }}</p>
+              <div class="alerts__metrics">
+                <span>
+                  <b>{{ silence.createdBy || '—' }}</b>
+                  creado por
+                </span>
+                <span>
+                  <b>{{ formatDate(silence.endsAt) }}</b>
+                  finaliza
+                </span>
+                <span>
+                  <b>{{ formatDate(silence.startsAt) }}</b>
+                  desde
+                </span>
+              </div>
+              <div class="alerts__tile-actions">
+                <button type="button" class="eku-add" (click)="expireSilence(silence)">
+                  Finalizar ahora
+                </button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  }
+</section>

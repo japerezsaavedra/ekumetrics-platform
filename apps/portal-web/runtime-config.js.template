@@ -1,0 +1,4 @@
+globalThis.__EKUMETRICS_CONFIG__ = Object.freeze({
+  apiUrl: '${PORTAL_API_URL}',
+  grafanaUrl: '${PORTAL_GRAFANA_URL}',
+});

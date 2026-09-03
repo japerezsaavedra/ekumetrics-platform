@@ -20,55 +20,72 @@
       <label class="eku-field">
         <span>Slug (tenantId del agente)</span>
         <input type="text" formControlName="slug" placeholder="cliente-norte" />
-        <small>{{ fieldInvalid('slug') ? 'Solo minusculas, numeros, punto, guion o _.' : '' }}</small>
+        <small>{{
+          fieldInvalid('slug') ? 'Solo minusculas, numeros, punto, guion o _.' : ''
+        }}</small>
       </label>
       <label class="eku-field">
         <span>Dominio corporativo</span>
         <input type="text" formControlName="emailDomain" placeholder="norte.cl" />
-        <small>{{ fieldInvalid('emailDomain') ? 'Ejemplo: cliente.com. Sin @ ni espacios.' : '' }}</small>
+        <small>{{
+          fieldInvalid('emailDomain') ? 'Ejemplo: cliente.com. Sin @ ni espacios.' : ''
+        }}</small>
       </label>
       @if (!editingSlug()) {
-      <label class="eku-field">
-        <span>Administrador</span>
-        <input type="text" formControlName="adminName" placeholder="Ana Perez" />
-        <small>{{ fieldInvalid('adminName') ? 'Indique el nombre del administrador.' : '' }}</small>
-      </label>
-      <label class="eku-field">
-        <span>Correo del administrador</span>
-        <input type="email" formControlName="adminEmail" [placeholder]="'ana' + domainHint()" />
-        <small>
-          @if (emailDomainInvalid()) {
-            Debe terminar en {{ domainHint() }}.
-          } @else if (fieldInvalid('adminEmail')) {
-            Indique un correo valido.
-          }
-        </small>
-      </label>
-      <label class="eku-field">
-        <span>Primer sitio</span>
-        <input type="text" formControlName="siteName" placeholder="Sede principal" />
-        <small>{{ fieldInvalid('siteName') ? 'Indique el nombre del sitio.' : '' }}</small>
-      </label>
-      <label class="eku-field">
-        <span>Slug del sitio (agent.site)</span>
-        <input type="text" formControlName="siteSlug" placeholder="local" />
-        <small>{{ fieldInvalid('siteSlug') ? 'Solo minusculas, numeros, punto, guion o _.' : '' }}</small>
-      </label>
+        <label class="eku-field">
+          <span>Administrador</span>
+          <input type="text" formControlName="adminName" placeholder="Ana Perez" />
+          <small>{{
+            fieldInvalid('adminName') ? 'Indique el nombre del administrador.' : ''
+          }}</small>
+        </label>
+        <label class="eku-field">
+          <span>Correo del administrador</span>
+          <input type="email" formControlName="adminEmail" [placeholder]="'ana' + domainHint()" />
+          <small>
+            @if (emailDomainInvalid()) {
+              Debe terminar en {{ domainHint() }}.
+            } @else if (fieldInvalid('adminEmail')) {
+              Indique un correo valido.
+            }
+          </small>
+        </label>
+        <label class="eku-field">
+          <span>Primer sitio</span>
+          <input type="text" formControlName="siteName" placeholder="Sede principal" />
+          <small>{{ fieldInvalid('siteName') ? 'Indique el nombre del sitio.' : '' }}</small>
+        </label>
+        <label class="eku-field">
+          <span>Slug del sitio (agent.site)</span>
+          <input type="text" formControlName="siteSlug" placeholder="local" />
+          <small>{{
+            fieldInvalid('siteSlug') ? 'Solo minusculas, numeros, punto, guion o _.' : ''
+          }}</small>
+        </label>
       }
       <button type="submit" [disabled]="saving()">
-        {{ saving() ? 'Guardando…' : editingSlug() ? 'Guardar tenant' : 'Crear tenant y administrador' }}
+        {{
+          saving()
+            ? 'Guardando…'
+            : editingSlug()
+              ? 'Guardar tenant'
+              : 'Crear tenant y administrador'
+        }}
       </button>
     </form>
   } @else if (!isOperator()) {
     <p class="tenants__hint">
-      Cambie el selector a Gradotech (default) para crear tenants. Los sitios de este tenant se administran en Sitios.
+      Cambie el selector a Gradotech (default) para crear tenants. Los sitios de este tenant se
+      administran en Sitios.
     </p>
   }
 
   @if (created(); as account) {
     <article class="tenants__secret">
       <p>Administrador creado en Keycloak. Entregue esta clave; no se vuelve a mostrar.</p>
-      <p><strong>{{ account.email }}</strong></p>
+      <p>
+        <strong>{{ account.email }}</strong>
+      </p>
       <p class="tenants__password">{{ account.temporaryPassword }}</p>
     </article>
   }
@@ -86,14 +103,29 @@
         </header>
         <p>{{ item.emailDomain ? '@' + item.emailDomain : 'Sin dominio' }}</p>
         <p>{{ adminLabel(item) }}</p>
-        <p>{{ item._count?.sites ?? item.sites?.length ?? 0 }} sitios · {{ item._count?.agents ?? 0 }} agentes</p>
+        <p>
+          {{ item._count?.sites ?? item.sites?.length ?? 0 }} sitios ·
+          {{ item._count?.agents ?? 0 }} agentes
+        </p>
         <div class="tenants__card-actions">
           <button type="button" (click)="useTenant(item.slug)">Usar este tenant</button>
           @if (isOperator() && item.slug !== 'default') {
-            <button type="button" class="eku-icon-btn" matTooltip="Editar" (click)="edit(item)" aria-label="Editar tenant">
+            <button
+              type="button"
+              class="eku-icon-btn"
+              matTooltip="Editar"
+              (click)="edit(item)"
+              aria-label="Editar tenant"
+            >
               <mat-icon>edit</mat-icon>
             </button>
-            <button type="button" class="eku-icon-btn eku-icon-btn--danger" matTooltip="Eliminar" (click)="remove(item)" aria-label="Eliminar tenant">
+            <button
+              type="button"
+              class="eku-icon-btn eku-icon-btn--danger"
+              matTooltip="Eliminar"
+              (click)="remove(item)"
+              aria-label="Eliminar tenant"
+            >
               <mat-icon>delete</mat-icon>
             </button>
           }

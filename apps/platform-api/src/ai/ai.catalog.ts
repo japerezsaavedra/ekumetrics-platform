@@ -1,4 +1,9 @@
-export const AI_PROVIDERS = ['ollama', 'openai', 'anthropic', 'openai_compat'] as const;
+export const AI_PROVIDERS = [
+  'ollama',
+  'openai',
+  'anthropic',
+  'openai_compat',
+] as const;
 
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 

@@ -1,0 +1,70 @@
+<section class="boards">
+  <eku-page-header title="Dashboards" subtitle="Arme una pantalla con widgets prediseñados y úsela también en kiosk.">
+    <div ekuActions class="board-actions">
+      <button type="button" class="eku-add" (click)="toggleCreate()">
+        {{ creating() ? 'Cancelar' : 'Nuevo dashboard' }}
+      </button>
+    </div>
+  </eku-page-header>
+
+  @if (error(); as message) {
+    <eku-error-state [message]="message" />
+  }
+
+  @if (creating()) {
+    <form class="eku-form" [formGroup]="form" (ngSubmit)="create()">
+      <label class="eku-field">
+        <span>Nombre</span>
+        <input type="text" formControlName="name" placeholder="NOC planta norte" />
+        @if (form.controls.name.invalid && form.controls.name.touched) {
+          <small>Indique un nombre.</small>
+        }
+      </label>
+      <label class="eku-field">
+        <span>Alcance</span>
+        <select formControlName="scope">
+          <option value="tenant">Todo el tenant</option>
+          <option value="site">Un sitio</option>
+        </select>
+      </label>
+      @if (form.controls.scope.value === 'site') {
+        <label class="eku-field">
+          <span>Sitio</span>
+          <select formControlName="siteId">
+            <option value="">Elija un sitio</option>
+            @for (site of sites(); track site.id) {
+              <option [ngValue]="site.id">{{ site.name }}</option>
+            }
+          </select>
+          @if (form.controls.siteId.invalid && form.controls.siteId.touched) {
+            <small>Elija el sitio.</small>
+          }
+        </label>
+      }
+      <button type="submit" class="eku-add" [disabled]="saving()">{{ saving() ? 'Creando…' : 'Crear' }}</button>
+    </form>
+  }
+
+  @if (items().length === 0 && !creating()) {
+    <eku-empty-state
+      title="Sin dashboards"
+      message="Cree uno, arrastre widgets y luego asígnelo a una pantalla de monitoreo."
+    />
+  } @else {
+    <ul class="boards__list">
+      @for (item of items(); track item.id) {
+        <li>
+          <div>
+            <strong>{{ item.name }}</strong>
+            <span>{{ scopeLabel(item) }} · {{ item.widgets.length }} widgets</span>
+          </div>
+          <div class="board-actions">
+            <a [routerLink]="['/dashboards', item.id]" class="eku-add">Editar</a>
+            <a [routerLink]="['/dashboards', item.id, 'ver']" class="eku-add">Ver</a>
+            <button type="button" class="eku-add" (click)="remove(item)">Eliminar</button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</section>

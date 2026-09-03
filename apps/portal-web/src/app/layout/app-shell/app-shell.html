@@ -1,135 +1,123 @@
 @if (isLogin()) {
   <router-outlet />
 } @else {
-<div class="shell" [class.is-kiosk]="kioskOn()">
-  <mat-toolbar class="shell__navbar">
-    <div class="shell__navbar-start">
-      <button
-        matIconButton
-        type="button"
-        (click)="asideOpen.set(!asideOpen())"
-        [attr.aria-label]="asideOpen() ? 'Ocultar menu' : 'Mostrar menu'"
-      >
-        <mat-icon>{{ asideOpen() ? 'menu_open' : 'menu' }}</mat-icon>
-      </button>
-      <a class="shell__logo" routerLink="/hosts" aria-label="Ekumetrics">
-        <img src="ekumetrics_logotipo_white.svg" alt="Ekumetrics" />
-      </a>
-    </div>
-    <span class="shell__spacer"></span>
-    <div class="shell__navbar-end">
-      @if (isOperator() && tenantOptions().length > 0) {
-        <label class="shell__tenant">
-          <span>Tenant</span>
-          <select [formControl]="tenantControl">
-            @for (item of tenantOptions(); track item.id) {
-              <option [value]="item.slug">{{ item.name }}</option>
-            }
-          </select>
-        </label>
-      }
-      @if (userEmail()) {
-        <span class="shell__user">{{ userName() }}</span>
-      }
-      <button
-        matIconButton
-        type="button"
-        (click)="toggleTheme()"
-        [attr.aria-label]="isDark() ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'"
-        [matTooltip]="isDark() ? 'Tema claro' : 'Tema oscuro'"
-      >
-        <mat-icon>{{ isDark() ? 'light_mode' : 'dark_mode' }}</mat-icon>
-      </button>
-      <button
-        matIconButton
-        type="button"
-        [matMenuTriggerFor]="configMenu"
-        aria-label="Configuracion"
-        matTooltip="Configuracion"
-      >
-        <mat-icon>settings</mat-icon>
-      </button>
-    </div>
-    <mat-menu #configMenu="matMenu">
-      <a mat-menu-item routerLink="/configuracion">
-        <mat-icon>psychology</mat-icon>
-        <span>Modelos de IA</span>
-      </a>
-      <a mat-menu-item routerLink="/configuracion/agente">
-        <mat-icon>download</mat-icon>
-        <span>Descargar agente</span>
-      </a>
-    </mat-menu>
-  </mat-toolbar>
+  <div class="shell" [class.is-kiosk]="kioskOn()">
+    <mat-toolbar class="shell__navbar">
+      <div class="shell__navbar-start">
+        <button
+          matIconButton
+          type="button"
+          (click)="asideOpen.set(!asideOpen())"
+          [attr.aria-label]="asideOpen() ? 'Ocultar menu' : 'Mostrar menu'"
+        >
+          <mat-icon>{{ asideOpen() ? 'menu_open' : 'menu' }}</mat-icon>
+        </button>
+        <a class="shell__logo" routerLink="/hosts" aria-label="Ekumetrics">
+          <img src="ekumetrics_logotipo_white.svg" alt="Ekumetrics" />
+        </a>
+      </div>
+      <span class="shell__spacer"></span>
+      <div class="shell__navbar-end">
+        @if (isOperator() && tenantOptions().length > 0) {
+          <label class="shell__tenant">
+            <span>Tenant</span>
+            <select [formControl]="tenantControl">
+              @for (item of tenantOptions(); track item.id) {
+                <option [value]="item.slug">{{ item.name }}</option>
+              }
+            </select>
+          </label>
+        }
+        @if (userEmail()) {
+          <span class="shell__user">{{ userName() }}</span>
+        }
+        <button
+          matIconButton
+          type="button"
+          (click)="toggleTheme()"
+          [attr.aria-label]="isDark() ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'"
+          [matTooltip]="isDark() ? 'Tema claro' : 'Tema oscuro'"
+        >
+          <mat-icon>{{ isDark() ? 'light_mode' : 'dark_mode' }}</mat-icon>
+        </button>
+      </div>
+    </mat-toolbar>
 
-  <mat-sidenav-container class="shell__body">
-    <mat-sidenav class="shell__aside" mode="side" [opened]="asideOpen()" (openedChange)="asideOpen.set($event)">
-      <nav class="shell__aside-nav" aria-label="Principal">
-        @for (item of nav(); track item.id) {
-          @if (item.children; as children) {
-            <div class="shell__group" [class.is-open]="isGroupOpen(item.id)">
-              <button
-                type="button"
-                class="shell__link shell__group-toggle"
-                [class.is-active]="isGroupActive(item)"
-                (click)="toggleGroup(item.id)"
+    <mat-sidenav-container class="shell__body">
+      <mat-sidenav
+        class="shell__aside"
+        mode="side"
+        [opened]="asideOpen()"
+        (openedChange)="asideOpen.set($event)"
+      >
+        <nav class="shell__aside-nav" aria-label="Principal">
+          @for (item of nav(); track item.id) {
+            @if (item.children; as children) {
+              <div class="shell__group" [class.is-open]="isGroupOpen(item.id)">
+                <button
+                  type="button"
+                  class="shell__link shell__group-toggle"
+                  [class.is-active]="isGroupActive(item)"
+                  (click)="toggleGroup(item.id)"
+                >
+                  <mat-icon>{{ item.icon }}</mat-icon>
+                  {{ item.label }}
+                  <mat-icon class="shell__chevron">{{
+                    isGroupOpen(item.id) ? 'expand_less' : 'expand_more'
+                  }}</mat-icon>
+                </button>
+                @if (isGroupOpen(item.id)) {
+                  <div class="shell__sub">
+                    @for (child of children; track child.path) {
+                      <a
+                        class="shell__link shell__link--sub"
+                        [routerLink]="child.path"
+                        routerLinkActive="is-active"
+                        [routerLinkActiveOptions]="{ exact: true }"
+                      >
+                        {{ child.label }}
+                      </a>
+                    }
+                  </div>
+                }
+              </div>
+            } @else if (item.path) {
+              <a
+                class="shell__link"
+                [routerLink]="item.path"
+                routerLinkActive="is-active"
+                [routerLinkActiveOptions]="{ exact: item.path === '/asistente' }"
               >
                 <mat-icon>{{ item.icon }}</mat-icon>
                 {{ item.label }}
-                <mat-icon class="shell__chevron">{{ isGroupOpen(item.id) ? 'expand_less' : 'expand_more' }}</mat-icon>
-              </button>
-              @if (isGroupOpen(item.id)) {
-                <div class="shell__sub">
-                  @for (child of children; track child.path) {
-                    <a
-                      class="shell__link shell__link--sub"
-                      [routerLink]="child.path"
-                      routerLinkActive="is-active"
-                      [routerLinkActiveOptions]="{ exact: true }"
-                    >
-                      {{ child.label }}
-                    </a>
-                  }
-                </div>
-              }
-            </div>
-          } @else if (item.path) {
-            <a
-              class="shell__link"
-              [routerLink]="item.path"
-              routerLinkActive="is-active"
-              [routerLinkActiveOptions]="{ exact: item.path === '/asistente' }"
-            >
-              <mat-icon>{{ item.icon }}</mat-icon>
-              {{ item.label }}
-            </a>
+              </a>
+            }
           }
+        </nav>
+
+        <footer class="shell__aside-footer">
+          <button type="button" class="shell__link shell__link--footer" (click)="logout()">
+            <mat-icon>logout</mat-icon>
+            Cerrar sesion
+          </button>
+        </footer>
+      </mat-sidenav>
+
+      <mat-sidenav-content>
+        <main class="shell__main">
+          <router-outlet />
+        </main>
+        @if (showAssistantFab()) {
+          <a
+            class="shell__fab"
+            routerLink="/asistente"
+            aria-label="Abrir EkuAssistant AI"
+            matTooltip="EkuAssistant AI"
+          >
+            <mat-icon>smart_toy</mat-icon>
+          </a>
         }
-      </nav>
-
-      <footer class="shell__aside-footer">
-        <button type="button" class="shell__link shell__link--footer" (click)="logout()">
-          <mat-icon>logout</mat-icon>
-          Cerrar sesion
-        </button>
-      </footer>
-    </mat-sidenav>
-
-    <mat-sidenav-content>
-      <main class="shell__main">
-        <router-outlet />
-      </main>
-      @if (showAssistantFab()) {
-        <a
-          class="shell__fab"
-          routerLink="/asistente"
-          aria-label="Abrir EkuAssistant AI"
-          matTooltip="EkuAssistant AI"
-        >
-          <mat-icon>smart_toy</mat-icon>
-        </a>
-      }
-    </mat-sidenav-content>
-  </mat-sidenav-container>
-</div>
+      </mat-sidenav-content>
+    </mat-sidenav-container>
+  </div>
 }

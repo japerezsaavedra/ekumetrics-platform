@@ -1,0 +1,186 @@
+<section class="board-editor">
+  <eku-page-header
+    title="Editar dashboard"
+    subtitle="Cree el layout arrastrando componentes y luego visualice la pantalla."
+  >
+    <div ekuActions class="board-actions">
+      <a routerLink="/dashboards" class="eku-add">Volver</a>
+      <button type="button" class="eku-add" (click)="save()" [disabled]="saving()">
+        {{ saving() ? 'Guardando…' : 'Guardar' }}
+      </button>
+      <button type="button" class="eku-add" (click)="removeBoard()" [disabled]="removing()">
+        {{ removing() ? 'Eliminando…' : 'Eliminar' }}
+      </button>
+    </div>
+  </eku-page-header>
+
+  @if (error(); as message) {
+    <eku-error-state [message]="message" />
+  }
+
+  <form class="board-editor__form" [formGroup]="form">
+    <div class="board-editor__meta">
+      <label class="eku-field">
+        <span>Nombre</span>
+        <input type="text" formControlName="name" />
+      </label>
+      <label class="eku-field">
+        <span>Alcance</span>
+        <select formControlName="scope">
+          <option value="tenant">Todo el tenant</option>
+          <option value="site">Un sitio</option>
+        </select>
+      </label>
+      @if (scopeKind() === 'site') {
+        <label class="eku-field">
+          <span>Sitio</span>
+          <select formControlName="siteId">
+            <option value="">Elija un sitio</option>
+            @for (site of sites(); track site.id) {
+              <option [ngValue]="site.id">{{ site.name }}</option>
+            }
+          </select>
+        </label>
+      }
+    </div>
+
+    <mat-tab-group
+      class="board-editor__tabs"
+      animationDuration="0"
+      [selectedIndex]="tab()"
+      (selectedIndexChange)="tab.set($event)"
+    >
+      <mat-tab label="Crear">
+        <div class="board-editor__layout">
+          <aside
+            class="board-editor__catalog"
+            cdkDropList
+            id="board-catalog"
+            #catalogList="cdkDropList"
+            [cdkDropListData]="catalog"
+            [cdkDropListConnectedTo]="[canvasList]"
+            [cdkDropListSortingDisabled]="true"
+          >
+            <h2>Componentes</h2>
+            <p>Arrástrelos al grid o pulse para agregar.</p>
+            @for (item of catalog; track item.type) {
+              <button type="button" cdkDrag [cdkDragData]="item" (click)="addWidget(item.type)">
+                {{ item.title }}
+                <small>{{ item.type }} · {{ item.w }}×{{ item.h }}</small>
+                <div class="board-editor__ghost" *cdkDragPreview>{{ item.title }}</div>
+                <div class="board-editor__placeholder board-editor__placeholder--catalog" *cdkDragPlaceholder></div>
+              </button>
+            }
+          </aside>
+
+          <div
+            class="board-editor__canvas"
+            cdkDropList
+            id="board-canvas"
+            #canvasList="cdkDropList"
+            cdkDropListOrientation="mixed"
+            [cdkDropListData]="widgets.controls"
+            (cdkDropListDropped)="drop($event)"
+            formArrayName="widgets"
+          >
+            @if (widgets.length === 0) {
+              <p class="board-editor__hint">Suelte un componente aquí.</p>
+            }
+            @for (widget of widgets.controls; track widget.controls.id.value; let index = $index) {
+              <article
+                class="board-editor__card"
+                [class.is-selected]="selectedId() === widget.controls.id.value"
+                [class.is-ok]="asWidget(widget).type === 'status-agent' && hostOf(asWidget(widget))?.online"
+                [class.is-crit]="asWidget(widget).type === 'status-agent' && hostOf(asWidget(widget)) && !hostOf(asWidget(widget))?.online"
+                [style.--w]="widget.controls.w.value"
+                [style.--h]="widget.controls.h.value"
+                cdkDrag
+                [cdkDragData]="index"
+                (click)="select(widget.controls.id.value)"
+              >
+                <header>
+                  <button type="button" class="board-editor__handle" cdkDragHandle aria-label="Mover">⋮⋮</button>
+                  <span>{{ widget.controls.title.value }}</span>
+                  <small>{{ hostOf(asWidget(widget))?.id || '—' }}</small>
+                </header>
+                @if (chartOf(asWidget(widget)); as option) {
+                  <eku-chart [option]="option" />
+                } @else if (asWidget(widget).type === 'chart-network') {
+                  @if (nicOf(asWidget(widget)); as nic) {
+                    <strong>{{ rateOf(nic.rxBytesPerSec) }}</strong>
+                    <p>Subida {{ rateOf(nic.txBytesPerSec) }} · {{ nic.device }}</p>
+                  } @else {
+                    <strong>—</strong>
+                  }
+                } @else {
+                  <strong>{{ valueOf(asWidget(widget)) }}</strong>
+                }
+                <div class="board-editor__ghost" *cdkDragPreview>{{ widget.controls.title.value }}</div>
+                <div
+                  class="board-editor__placeholder"
+                  *cdkDragPlaceholder
+                  [style.--w]="widget.controls.w.value"
+                  [style.--h]="widget.controls.h.value"
+                ></div>
+              </article>
+            }
+          </div>
+
+          <aside class="board-editor__props">
+            <h2>Widget</h2>
+            @if (selectedGroup(); as widget) {
+              <div [formGroup]="widget">
+                <label class="eku-field">
+                  <span>Nombre</span>
+                  <input type="text" formControlName="title" />
+                </label>
+                <label class="eku-field">
+                  <span>Agente</span>
+                  <select formControlName="agentId">
+                    <option value="">Primero disponible</option>
+                    @for (host of scopedHosts(); track host.id) {
+                      <option [ngValue]="host.id">{{ hostLabel(host) }}</option>
+                    }
+                  </select>
+                </label>
+                <div class="board-editor__size">
+                  <label class="eku-field">
+                    <span>Columnas</span>
+                    <select formControlName="w">
+                      @for (size of widths; track size) {
+                        <option [ngValue]="size">{{ size }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="eku-field">
+                    <span>Filas</span>
+                    <select formControlName="h">
+                      @for (size of heights; track size) {
+                        <option [ngValue]="size">{{ size }}</option>
+                      }
+                    </select>
+                  </label>
+                </div>
+                <button type="button" class="eku-add" (click)="removeSelected()">Quitar</button>
+              </div>
+            } @else {
+              <p>Seleccione un widget del grid para nombrarlo, elegir agente y tamaño.</p>
+            }
+          </aside>
+        </div>
+      </mat-tab>
+
+      <mat-tab label="Visualizar">
+        <section class="board-editor__view">
+          <h2>{{ form.controls.name.value || 'Dashboard' }}</h2>
+          <app-board-preview-grid
+            [widgets]="draftWidgets()"
+            [hosts]="scopedHosts()"
+            [nics]="scopedNics()"
+            [series]="preview()?.series ?? {}"
+          />
+        </section>
+      </mat-tab>
+    </mat-tab-group>
+  </form>
+</section>

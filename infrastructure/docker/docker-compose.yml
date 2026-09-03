@@ -2,17 +2,17 @@ name: ekumetrics
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:0.8.6-pg18-bookworm
     container_name: ekumetrics-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ekumetrics
-      POSTGRES_PASSWORD: ekumetrics
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_DB: ekumetrics
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:5432:5432"
+      - "${BIND_ADDR:-127.0.0.1}:5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres18-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ekumetrics -d ekumetrics"]
       interval: 5s
@@ -20,94 +20,160 @@ services:
       retries: 10
 
   nats:
-    image: nats:2.11-alpine
+    image: nats:2.14.5-alpine
     container_name: ekumetrics-nats
     restart: unless-stopped
-    command: ["-js", "-m", "8222"]
+    command: ["-c", "/etc/nats/nats-server.conf"]
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:4222:4222"
-      - "${BIND_ADDR:-0.0.0.0}:8222:8222"
+      - "${BIND_ADDR:-127.0.0.1}:4222:4222"
+      - "${BIND_ADDR:-127.0.0.1}:8222:8222"
+    volumes:
+      - ./nats/nats-server.conf:/etc/nats/nats-server.conf:ro
+      - nats-data:/data
 
   prometheus:
-    image: prom/prometheus:v3.4.1
+    image: prom/prometheus:v3.14.0
     container_name: ekumetrics-prometheus
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-10GB}
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:9091:9090"
+      - "${BIND_ADDR:-127.0.0.1}:9091:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/slo-rules.yml:/etc/prometheus/rules/slo-rules.yml:ro
+      - ./prometheus/capacity-rules.yml:/etc/prometheus/rules/capacity-rules.yml:ro
       - prometheus-data:/prometheus
 
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.12.1
+    container_name: ekumetrics-node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+)($$|/)
+    volumes:
+      - /:/host:ro
+
   loki:
-    image: grafana/loki:3.4.3
+    image: grafana/loki:3.7.6
     container_name: ekumetrics-loki
     restart: unless-stopped
     command: ["-config.file=/etc/loki/local-config.yaml"]
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:3100:3100"
+      - "${BIND_ADDR:-127.0.0.1}:3100:3100"
     volumes:
       - ./loki/loki.yaml:/etc/loki/local-config.yaml:ro
       - loki-data:/loki
 
+  tempo:
+    image: grafana/tempo:3.0.2
+    container_name: ekumetrics-tempo
+    restart: unless-stopped
+    command: ["-target=all", "-config.file=/etc/tempo/tempo.yaml"]
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:3200:3200"
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    healthcheck:
+      test: ["CMD", "/tempo", "-health", "-health.url=http://127.0.0.1:3200/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   alertmanager:
-    image: prom/alertmanager:v0.28.1
+    image: prom/alertmanager:v0.34.0
     container_name: ekumetrics-alertmanager
     restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:9093:9093"
+      - "${BIND_ADDR:-127.0.0.1}:9093:9093"
     volumes:
-      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager-data:/alertmanager
 
   grafana:
-    image: grafana/grafana:12.0.2
+    image: grafana/grafana:13.2.0
     container_name: ekumetrics-grafana
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: ekumetrics
-      GF_SECURITY_ADMIN_PASSWORD: ekumetrics
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
       GF_USERS_DEFAULT_THEME: light
       GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_SECURITY_COOKIE_SAMESITE: disabled
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      # Evita descargas y actualizaciones implícitas; los plugins deben fijarse explícitamente.
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:3001:3000"
+      - "${BIND_ADDR:-127.0.0.1}:3001:3000"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     depends_on:
-      - prometheus
-      - loki
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      tempo:
+        condition: service_healthy
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.128.0
+    image: otel/opentelemetry-collector-contrib:0.159.0
     container_name: ekumetrics-otel
     restart: unless-stopped
     command: ["--config=/etc/otelcol/config.yaml"]
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:4317:4317"
-      - "${BIND_ADDR:-0.0.0.0}:4318:4318"
+      - "${BIND_ADDR:-127.0.0.1}:4317:4317"
+      - "${BIND_ADDR:-127.0.0.1}:4318:4318"
     volumes:
       - ./otel/config.yaml:/etc/otelcol/config.yaml:ro
     depends_on:
-      - prometheus
-      - loki
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      tempo:
+        condition: service_healthy
+
+  alloy:
+    image: grafana/alloy:v1.19.2
+    container_name: ekumetrics-alloy
+    restart: unless-stopped
+    command: ["run", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy
+    depends_on:
+      loki:
+        condition: service_started
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.3
+    image: quay.io/keycloak/keycloak:26.7.2
     container_name: ekumetrics-keycloak
     command: ["start-dev", "--import-realm"]
     environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: ekumetrics
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME: http://${PUBLIC_HOST:-localhost}:8080
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:8080:8080"
+      - "${BIND_ADDR:-127.0.0.1}:8080:8080"
     volumes:
       - ./keycloak/ekumetrics-realm.json:/opt/keycloak/data/import/ekumetrics-realm.json:ro
     healthcheck:
@@ -121,28 +187,51 @@ services:
     build:
       context: ../..
       dockerfile: apps/platform-api/Dockerfile
-    image: ekumetrics-platform-api:1.0.0
+    image: ekumetrics-platform-api:${EKUMETRICS_VERSION:-1.0.0}
     container_name: ekumetrics-api
     restart: unless-stopped
     environment:
       PORT: "3000"
-      DATABASE_URL: postgresql://ekumetrics:ekumetrics@postgres:5432/ekumetrics?schema=public
+      DEPLOYMENT_MODE: local
+      PRODUCT_VERSION: ${EKUMETRICS_VERSION:-1.0.0}
+      DATABASE_URL: postgresql://ekumetrics:${POSTGRES_PASSWORD:-}@postgres:5432/ekumetrics?schema=public
       CORS_ORIGIN: http://${PUBLIC_HOST:-localhost}:4200
+      PORTAL_PUBLIC_URL: http://${PUBLIC_HOST:-localhost}:4200
+      API_PUBLIC_URL: http://${PUBLIC_HOST:-localhost}:3000
       KEYCLOAK_URL: http://${PUBLIC_HOST:-localhost}:8080
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080
       KEYCLOAK_REALM: ekumetrics
       KEYCLOAK_AUDIENCE: portal-web
+      KEYCLOAK_CLIENT_ID: portal-web
       KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: ekumetrics
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
       KEYCLOAK_ADMIN_REALM: master
       PROMETHEUS_URL: http://prometheus:9090
       LOKI_URL: http://loki:3100
+      TEMPO_URL: http://tempo:3200
+      ALERTMANAGER_URL: http://alertmanager:9093
+      ALERTMANAGER_CONFIG_PATH: /etc/alertmanager/alertmanager.yml
+      INGEST_SHARED_KEY: ${INGEST_SHARED_KEY:-}
+      KIOSK_TOKEN_SECRET: ${KIOSK_TOKEN_SECRET:-}
+      BFF_SESSION_SECRET: ${BFF_SESSION_SECRET:-}
+      AI_SETTINGS_ENCRYPTION_KEY: ${AI_SETTINGS_ENCRYPTION_KEY:-}
+      EVENT_RETENTION_DAYS: ${EVENT_RETENTION_DAYS:-30}
+      EVENT_RETENTION_INTERVAL_MS: ${EVENT_RETENTION_INTERVAL_MS:-3600000}
+      EVENT_RETENTION_BATCH_SIZE: ${EVENT_RETENTION_BATCH_SIZE:-1000}
+      EVENT_RETENTION_MAX_BATCHES: ${EVENT_RETENTION_MAX_BATCHES:-20}
+      AI_INQUIRY_RETENTION_DAYS: ${AI_INQUIRY_RETENTION_DAYS:-90}
+      AI_INQUIRY_RETENTION_INTERVAL_MS: ${AI_INQUIRY_RETENTION_INTERVAL_MS:-3600000}
+      AI_INQUIRY_RETENTION_BATCH_SIZE: ${AI_INQUIRY_RETENTION_BATCH_SIZE:-500}
       HOLMES_URL: http://holmes:5050
-      HOLMES_UPSTREAM_KEY: holmes-local
+      HOLMES_UPSTREAM_KEY: ${HOLMES_UPSTREAM_KEY:-holmes-local}
       AI_DEFAULT_PROVIDER: ollama
       OLLAMA_URL: http://ollama:11434/v1
+      AI_EMBEDDING_URL: http://ollama:11434
+      AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-qwen3-embedding:0.6b}
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:3000:3000"
+      - "${BIND_ADDR:-127.0.0.1}:3000:3000"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
     depends_on:
       postgres:
         condition: service_healthy
@@ -151,6 +240,10 @@ services:
       prometheus:
         condition: service_started
       loki:
+        condition: service_started
+      tempo:
+        condition: service_healthy
+      alertmanager:
         condition: service_started
     healthcheck:
       test:
@@ -165,38 +258,62 @@ services:
       retries: 10
       start_period: 20s
 
+  ingest-gateway:
+    image: nginx:1.30.4-alpine
+    container_name: ekumetrics-ingest-gateway
+    restart: unless-stopped
+    environment:
+      INGEST_SHARED_KEY: ${INGEST_SHARED_KEY:-}
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:4318:4318"
+    volumes:
+      - ./ingest-gateway/15-load-secrets.envsh:/docker-entrypoint.d/15-load-secrets.envsh:ro
+      - ./ingest-gateway/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    depends_on:
+      platform-api:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4318/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   portal-web:
     build:
       context: ../..
       dockerfile: apps/portal-web/Dockerfile
-    image: ekumetrics-portal-web:1.0.0
+    image: ekumetrics-portal-web:${EKUMETRICS_VERSION:-1.0.0}
     container_name: ekumetrics-portal
     restart: unless-stopped
+    environment:
+      PORTAL_API_URL: http://${PUBLIC_HOST:-localhost}:3000
+      PORTAL_GRAFANA_URL: http://${PUBLIC_HOST:-localhost}:3001
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:4200:80"
+      - "${BIND_ADDR:-127.0.0.1}:4200:8080"
     depends_on:
       platform-api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
       interval: 15s
       timeout: 5s
       retries: 5
 
   holmes:
-    image: us-central1-docker.pkg.dev/genuine-flight-317411/devel/holmes
+    # 0.36-0.39 presentan una regresión DNS upstream; 0.35.0 es la última versión verificada.
+    image: robustadev/holmes:0.35.0
     container_name: ekumetrics-holmes
     profiles: ["ai"]
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:5050:5050"
-    env_file:
-      - ../../apps/platform-api/.env
+      - "${BIND_ADDR:-127.0.0.1}:5050:5050"
     environment:
-      OPENAI_API_BASE: http://platform-api:3000/v1/ai/upstream
-      OPENAI_API_KEY: holmes-local
+      OPENAI_API_BASE: ${HOLMES_OPENAI_API_BASE:-http://platform-api:3000/v1/ai/upstream}
+      OPENAI_API_KEY: ${HOLMES_UPSTREAM_KEY:-holmes-local}
     volumes:
       - ./holmes:/root/.holmes:ro
     working_dir: /app
@@ -204,6 +321,7 @@ services:
     depends_on:
       - prometheus
       - loki
+      - tempo
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5050/healthz"]
       interval: 30s
@@ -212,11 +330,11 @@ services:
       start_period: 20s
 
   ollama:
-    image: ollama/ollama:0.32.14
+    image: ollama/ollama:0.33.0
     container_name: ekumetrics-ollama
     restart: unless-stopped
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:11434:11434"
+      - "${BIND_ADDR:-127.0.0.1}:11434:11434"
     volumes:
       - ollama-data:/root/.ollama
     healthcheck:
@@ -227,24 +345,29 @@ services:
       start_period: 20s
 
   ollama-pull:
-    image: ollama/ollama:0.32.14
+    image: ollama/ollama:0.33.0
     container_name: ekumetrics-ollama-pull
     depends_on:
       ollama:
         condition: service_started
-    environment:
-      OLLAMA_HOST: ollama:11434
     entrypoint:
       [
         "sh",
         "-c",
-        "until ollama list >/dev/null 2>&1; do sleep 2; done; ollama pull qwen3.5:4b",
+        "until ollama list >/dev/null 2>&1; do sleep 2; done; ollama pull qwen3.5:4b && ollama pull $${AI_EMBEDDING_MODEL:-qwen3-embedding:0.6b}",
       ]
+    environment:
+      OLLAMA_HOST: ollama:11434
+      AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-qwen3-embedding:0.6b}
     restart: on-failure
 
 volumes:
-  postgres-data:
+  postgres18-data:
+  nats-data:
   prometheus-data:
+  alertmanager-data:
   grafana-data:
   ollama-data:
   loki-data:
+  tempo-data:
+  alloy-data:

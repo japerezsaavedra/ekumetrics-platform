@@ -218,6 +218,133 @@
   color: inherit;
 }
 
+.holmes__investigation {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+  padding: 0.75rem;
+  border: 1px solid var(--eku-border);
+  border-left: 0.25rem solid var(--eku-primary);
+  border-radius: 0.75rem;
+  background: var(--eku-surface-container);
+  color: var(--eku-text-secondary);
+  font-size: 0.8rem;
+}
+
+.holmes__investigation--attention {
+  border-left-color: var(--eku-accent);
+}
+
+.holmes__investigation--no_data {
+  border-left-color: var(--eku-text-secondary);
+}
+
+.holmes__investigation-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+}
+
+.holmes__investigation-summary strong {
+  color: var(--eku-text-primary);
+}
+
+.holmes__investigation p,
+.holmes__investigation small {
+  margin: 0;
+}
+
+.holmes__investigation ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.holmes__investigation li {
+  display: inline-flex;
+  gap: 0.35rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--eku-border);
+  border-radius: 999px;
+  background: var(--eku-surface);
+}
+
+.holmes__investigation li.is-unavailable,
+.holmes__investigation li.is-no_data {
+  border-style: dashed;
+}
+
+.holmes__evidence {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--eku-border);
+  color: var(--eku-text-secondary);
+  font-size: 0.8rem;
+}
+
+.holmes__evidence summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: fit-content;
+  color: var(--eku-text-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.holmes__evidence summary .mat-icon {
+  width: 1rem;
+  height: 1rem;
+  font-size: 1rem;
+}
+
+.holmes__evidence ul {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.holmes__evidence li,
+.holmes__trace {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.holmes__evidence-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.6rem;
+}
+
+.holmes__citation {
+  padding: 0.08rem 0.35rem;
+  border-radius: 0.35rem;
+  background: var(--eku-primary);
+  color: var(--eku-on-primary);
+  font-weight: 700;
+}
+
+.holmes__trace {
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.55rem;
+  background: var(--eku-surface-container);
+}
+
+.holmes__trace code {
+  overflow-wrap: anywhere;
+  color: var(--eku-text-primary);
+}
+
+.holmes__trace small {
+  overflow-wrap: anywhere;
+}
+
 .holmes__wait-box {
   min-width: 0;
   flex: 1;

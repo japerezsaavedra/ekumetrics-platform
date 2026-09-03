@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PlatformService } from '../platform/platform.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { TelemetryClient, type InstantRow } from './telemetry.client';
@@ -80,18 +81,70 @@ export class DashboardService {
     private readonly telemetry: TelemetryClient,
     private readonly prisma: PrismaService,
     private readonly tenants: TenantsService,
+    private readonly platform: PlatformService,
   ) {}
+
+  async getInventory(tenantInput?: string, siteInput?: string) {
+    const tenantSlug = this.sanitize(tenantInput);
+    const siteSlug = this.sanitize(siteInput);
+    if (!tenantSlug) return this.emptyInventory();
+    const [hosts, nics, databases, networkDevices, queues, icewarp, sap] =
+      await Promise.all([
+        this.listHosts(tenantSlug),
+        this.listNics(tenantSlug),
+        this.listDatabases(tenantSlug),
+        this.listNetworkDevices(tenantSlug),
+        this.listQueues(tenantSlug),
+        this.listIcewarp(tenantSlug),
+        this.listSap(tenantSlug),
+      ]);
+    const inSite = <T extends { siteId: string | null }>(items: T[]) =>
+      items.filter((item) => !siteSlug || item.siteId === siteSlug);
+    return {
+      hosts: inSite(hosts),
+      nics: inSite(nics),
+      databases: inSite(databases),
+      networkDevices: inSite(networkDevices),
+      queues: inSite(queues),
+      icewarp: inSite(icewarp),
+      sap: inSite(sap),
+    };
+  }
+
+  private emptyInventory() {
+    return {
+      hosts: [] as DashboardHost[],
+      nics: [] as DashboardNic[],
+      databases: [] as DashboardDatabase[],
+      networkDevices: [] as DashboardTarget[],
+      queues: [] as DashboardTarget[],
+      icewarp: [] as DashboardTarget[],
+      sap: [] as DashboardTarget[],
+    };
+  }
 
   async getDashboard(
     agentIdInput?: string,
     rangeInput?: string,
     tenantInput?: string,
     viewInput?: string,
+    siteInput?: string,
   ) {
     const window = this.windowFor(rangeInput);
     const tenantSlug = this.sanitize(tenantInput);
-    const rawHosts = await this.listHosts(tenantSlug);
-    const [hosts, nics, databases, networkDevices, queues, icewarp, sap] = await Promise.all([
+    const siteSlug = this.sanitize(siteInput);
+    const rawHosts = (await this.listHosts(tenantSlug)).filter(
+      (item) => !siteSlug || item.siteId === siteSlug,
+    );
+    const [
+      hosts,
+      allNics,
+      allDatabases,
+      allNetworkDevices,
+      allQueues,
+      allIcewarp,
+      allSap,
+    ] = await Promise.all([
       this.enrichHosts(rawHosts),
       this.listNics(tenantSlug),
       this.listDatabases(tenantSlug),
@@ -100,11 +153,21 @@ export class DashboardService {
       this.listIcewarp(tenantSlug),
       this.listSap(tenantSlug),
     ]);
+    const inSite = <T extends { siteId: string | null }>(items: T[]) =>
+      items.filter((item) => !siteSlug || item.siteId === siteSlug);
+    const nics = inSite(allNics);
+    const databases = inSite(allDatabases);
+    const networkDevices = inSite(allNetworkDevices);
+    const queues = inSite(allQueues);
+    const icewarp = inSite(allIcewarp);
+    const sap = inSite(allSap);
     const requested = this.sanitize(agentIdInput);
     const wantIcewarp = this.sanitize(viewInput) === 'icewarp';
     const hostId = wantIcewarp
       ? requested || icewarp[0]?.hostId || hosts[0]?.id || null
-      : (requested && hosts.some((item) => item.id === requested) ? requested : null) ||
+      : (requested && hosts.some((item) => item.id === requested)
+          ? requested
+          : null) ||
         hosts[0]?.id ||
         null;
     if (!hostId) {
@@ -126,6 +189,7 @@ export class DashboardService {
         host: this.emptyHost(),
         agent: this.emptyAgent(),
         logs: { volume: [], volumeAll: [], lines: [] },
+        thresholds: await this.platform.thresholds('agents', tenantSlug || 'default'),
         refreshedAt: Date.now(),
       };
     }
@@ -202,8 +266,12 @@ export class DashboardService {
       this.safeInstant(`sum(system_memory_usage_bytes${sel('state="used"')})`),
       this.safeInstant(`sum(system_memory_usage_bytes${sel()})`),
       this.safeInstant(diskQuery),
-      this.safeInstant(`sum(system_filesystem_usage_bytes${sel('mountpoint="/",state="used"')})`),
-      this.safeInstant(`sum(system_filesystem_usage_bytes${sel('mountpoint="/"')})`),
+      this.safeInstant(
+        `sum(system_filesystem_usage_bytes${sel('mountpoint="/",state="used"')})`,
+      ),
+      this.safeInstant(
+        `sum(system_filesystem_usage_bytes${sel('mountpoint="/"')})`,
+      ),
       this.safeInstant(diskUsedQuery),
       this.safeInstant(diskFreeQuery),
       this.safeInstant(diskTotalQuery),
@@ -231,7 +299,9 @@ export class DashboardService {
       this.safeInstant(`time() - max(timestamp(ekms_agent_identity${sel()}))`),
       this.safeInstant(`time() - max(process_start_time_seconds${sel()})`),
       this.safeInstant('max(ekms_agent_license_valid) or vector(0)'),
-      this.safeInstant('max(ekms_agent_license_until_timestamp_seconds) - time()'),
+      this.safeInstant(
+        'max(ekms_agent_license_until_timestamp_seconds) - time()',
+      ),
       this.safeInstant('ekms_agent_info'),
       this.safeInstant(`ekms_agent_identity${sel()}`),
       this.safeInstant(`ekms_agent_module_enabled${sel()}`),
@@ -241,14 +311,20 @@ export class DashboardService {
         'sum(count_over_time({service_name="ekumetrics-agent"}[5m]))',
         window,
       ),
-      this.safeLokiRange('sum(count_over_time({service_name=~".+"}[5m]))', window),
+      this.safeLokiRange(
+        'sum(count_over_time({service_name=~".+"}[5m]))',
+        window,
+      ),
       this.safeLokiLines('{service_name="ekumetrics-agent"}', window.seconds),
       this.listProcesses(hostId),
     ]);
 
     const ident = identity[0]?.metric ?? {};
-    const receive = netSeries.find((row) => row.metric.direction === 'receive')?.values ?? [];
-    const transmit = netSeries.find((row) => row.metric.direction === 'transmit')?.values ?? [];
+    const receive =
+      netSeries.find((row) => row.metric.direction === 'receive')?.values ?? [];
+    const transmit =
+      netSeries.find((row) => row.metric.direction === 'transmit')?.values ??
+      [];
     const icewarpBoard = wantIcewarp
       ? await this.loadIcewarpBoard(hostId, window, icewarp)
       : undefined;
@@ -268,6 +344,7 @@ export class DashboardService {
         tenantId: item.tenantId,
       })),
       agentId: hostId,
+      thresholds: await this.platform.thresholds('agents', tenantSlug || 'default'),
       refreshedAt: Date.now(),
       host: {
         id: hostId,
@@ -286,7 +363,8 @@ export class DashboardService {
         load1m: this.telemetry.first(load1),
         load5m: this.telemetry.first(load5),
         load15m: this.telemetry.first(load15),
-        uptimeSeconds: this.telemetry.first(uptime) ?? this.telemetry.first(uptimeAlt),
+        uptimeSeconds:
+          this.telemetry.first(uptime) ?? this.telemetry.first(uptimeAlt),
         series: {
           cpu: cpuSeries[0]?.values ?? [],
           cpuByState: cpuStateSeries.map((row) => ({
@@ -302,16 +380,24 @@ export class DashboardService {
           })),
           networkRx: receive,
           networkTx: transmit,
-          diskIo: this.named(diskIoSeries, (metric) => metric.direction || 'io'),
-          diskOps: this.named(diskOpsSeries, (metric) => metric.direction || 'ops'),
-          networkPackets: this.named(netPktSeries, (metric) => metric.direction || 'packets'),
+          diskIo: this.named(
+            diskIoSeries,
+            (metric) => metric.direction || 'io',
+          ),
+          diskOps: this.named(
+            diskOpsSeries,
+            (metric) => metric.direction || 'ops',
+          ),
+          networkPackets: this.named(
+            netPktSeries,
+            (metric) => metric.direction || 'packets',
+          ),
           networkFaults: [
             ...this.named(netErrSeries, () => 'errores'),
             ...this.named(netDropSeries, () => 'descartes'),
           ],
-          networkConn: this.named(
-            netConnSeries,
-            (metric) => `${metric.protocol || 'net'} ${metric.state || ''}`.trim(),
+          networkConn: this.named(netConnSeries, (metric) =>
+            `${metric.protocol || 'net'} ${metric.state || ''}`.trim(),
           ),
         },
       },
@@ -372,10 +458,13 @@ export class DashboardService {
       }
     }
     const selector = this.tenantSelector(tenantSlug);
-    for (const row of await this.safeInstant(`system_cpu_logical_count${selector}`)) {
+    for (const row of await this.safeInstant(
+      `system_cpu_logical_count${selector}`,
+    )) {
       add({
         id: row.metric.agent_id?.trim() ?? '',
-        siteId: row.metric.site_id ?? row.metric.host_site ?? row.metric.site ?? null,
+        siteId:
+          row.metric.site_id ?? row.metric.host_site ?? row.metric.site ?? null,
         tenantId: row.metric.tenant_id ?? tenantSlug ?? null,
         mode: row.metric.mode ?? null,
         version: null,
@@ -388,7 +477,9 @@ export class DashboardService {
       });
     }
     if (unique.size === 0) {
-      for (const row of await this.safeInstant(`ekms_agent_identity${selector}`)) {
+      for (const row of await this.safeInstant(
+        `ekms_agent_identity${selector}`,
+      )) {
         add({
           id: row.metric.agent_id?.trim() ?? '',
           siteId: row.metric.site_id ?? row.metric.site ?? null,
@@ -408,10 +499,9 @@ export class DashboardService {
   }
 
   private tenantSelector(tenantSlug: string, extra = '') {
-    const parts = [
-      tenantSlug ? `tenant_id="${tenantSlug}"` : '',
-      extra,
-    ].filter(Boolean);
+    const parts = [tenantSlug ? `tenant_id="${tenantSlug}"` : '', extra].filter(
+      Boolean,
+    );
     return parts.length ? `{${parts.join(',')}}` : '';
   }
 
@@ -419,23 +509,35 @@ export class DashboardService {
     if (hosts.length === 0) {
       return hosts;
     }
-    const [cpuRows, memRows, uptimeRows, agentUptimeRows, coreRows, identRows, infoRows, onlineRows] =
-      await Promise.all([
-        this.safeInstant(
-          '1 - sum by (agent_id) (rate(system_cpu_time_seconds_total{state="idle"}[1m])) / sum by (agent_id) (rate(system_cpu_time_seconds_total[1m]))',
-        ),
-        this.safeInstant(
-          'sum by (agent_id) (system_memory_usage_bytes{state="used"}) / sum by (agent_id) (system_memory_usage_bytes)',
-        ),
-        this.safeInstant(
-          'max by (agent_id) (system_uptime_seconds) or max by (agent_id) (system_uptime)',
-        ),
-        this.safeInstant('time() - max by (agent_id) (process_start_time_seconds)'),
-        this.safeInstant('max by (agent_id) (system_cpu_logical_count)'),
-        this.safeInstant('ekms_agent_identity'),
-        this.safeInstant('ekms_agent_info'),
-        this.safeInstant('max by (agent_id) (present_over_time(ekms_agent_identity[2m]))'),
-      ]);
+    const [
+      cpuRows,
+      memRows,
+      uptimeRows,
+      agentUptimeRows,
+      coreRows,
+      identRows,
+      infoRows,
+      onlineRows,
+    ] = await Promise.all([
+      this.safeInstant(
+        '1 - sum by (agent_id) (rate(system_cpu_time_seconds_total{state="idle"}[1m])) / sum by (agent_id) (rate(system_cpu_time_seconds_total[1m]))',
+      ),
+      this.safeInstant(
+        'sum by (agent_id) (system_memory_usage_bytes{state="used"}) / sum by (agent_id) (system_memory_usage_bytes)',
+      ),
+      this.safeInstant(
+        'max by (agent_id) (system_uptime_seconds) or max by (agent_id) (system_uptime)',
+      ),
+      this.safeInstant(
+        'time() - max by (agent_id) (process_start_time_seconds)',
+      ),
+      this.safeInstant('max by (agent_id) (system_cpu_logical_count)'),
+      this.safeInstant('ekms_agent_identity'),
+      this.safeInstant('ekms_agent_info'),
+      this.safeInstant(
+        'max by (agent_id) (present_over_time(ekms_agent_identity[2m]))',
+      ),
+    ]);
     const cpu = this.valueByAgent(cpuRows);
     const mem = this.valueByAgent(memRows);
     const uptime = this.valueByAgent(uptimeRows);
@@ -448,7 +550,10 @@ export class DashboardService {
     return hosts.map((host) => ({
       ...host,
       mode: modes.get(host.id) ?? host.mode,
-      version: versions.get(host.id) ?? (host.siteId ? versionsBySite.get(host.siteId) : undefined) ?? host.version,
+      version:
+        versions.get(host.id) ??
+        (host.siteId ? versionsBySite.get(host.siteId) : undefined) ??
+        host.version,
       online: online.has(host.id) ? online.get(host.id)! >= 1 : host.online,
       cpuUsed: cpu.get(host.id) ?? null,
       memoryUsed: mem.get(host.id) ?? null,
@@ -461,9 +566,15 @@ export class DashboardService {
   private async listProcesses(hostId: string) {
     const sel = `{agent_id="${hostId}"}`;
     const [cpuRows, memRows, virtRows, diskRows] = await Promise.all([
-      this.safeInstant(`sum by (process, pid) (rate(process_cpu_time_seconds_total${sel}[1m]))`),
-      this.safeInstant(`sum by (process, pid) (process_memory_usage_bytes${sel})`),
-      this.safeInstant(`sum by (process, pid) (process_memory_virtual_bytes${sel})`),
+      this.safeInstant(
+        `sum by (process, pid) (rate(process_cpu_time_seconds_total${sel}[1m]))`,
+      ),
+      this.safeInstant(
+        `sum by (process, pid) (process_memory_usage_bytes${sel})`,
+      ),
+      this.safeInstant(
+        `sum by (process, pid) (process_memory_virtual_bytes${sel})`,
+      ),
       this.safeInstant(
         `sum by (process, pid, direction) (rate(process_disk_io_bytes_total${sel}[1m]))`,
       ),
@@ -527,7 +638,11 @@ export class DashboardService {
     }
     return [...items.values()]
       .filter((item) => item.name || item.pid)
-      .sort((a, b) => (b.cpu ?? 0) - (a.cpu ?? 0) || (b.memoryBytes ?? 0) - (a.memoryBytes ?? 0))
+      .sort(
+        (a, b) =>
+          (b.cpu ?? 0) - (a.cpu ?? 0) ||
+          (b.memoryBytes ?? 0) - (a.memoryBytes ?? 0),
+      )
       .slice(0, 40);
   }
 
@@ -596,19 +711,45 @@ export class DashboardService {
   private async listDatabases(tenantSlug = ''): Promise<DashboardDatabase[]> {
     const sel = this.tenantSelector(tenantSlug);
     return this.collectTargets(tenantSlug, [
-      { engine: 'postgresql', query: `count by (agent_id, site_id, database_name) (postgresql_backends${sel})` },
-      { engine: 'postgresql', query: `count by (agent_id, site_id, database_name) (postgresql_database_count${sel})` },
-      { engine: 'mysql', query: `count by (agent_id, site_id) (mysql_buffer_pool_data_pages${sel})` },
-      { engine: 'mysql', query: `count by (agent_id, site_id) (mysql_uptime${sel})` },
-      { engine: 'mongodb', query: `count by (agent_id, site_id) (mongodb_connection_count${sel})` },
-      { engine: 'mongodb', query: `count by (agent_id, site_id) (mongodb_connections${sel})` },
-      { engine: 'redis', query: `count by (agent_id, site_id) (redis_uptime${sel})` },
-      { engine: 'redis', query: `count by (agent_id, site_id) (redis_clients${sel})` },
+      {
+        engine: 'postgresql',
+        query: `count by (agent_id, site_id, database_name) (postgresql_backends${sel})`,
+      },
+      {
+        engine: 'postgresql',
+        query: `count by (agent_id, site_id, database_name) (postgresql_database_count${sel})`,
+      },
+      {
+        engine: 'mysql',
+        query: `count by (agent_id, site_id) (mysql_buffer_pool_data_pages${sel})`,
+      },
+      {
+        engine: 'mysql',
+        query: `count by (agent_id, site_id) (mysql_uptime${sel})`,
+      },
+      {
+        engine: 'mongodb',
+        query: `count by (agent_id, site_id) (mongodb_connection_count${sel})`,
+      },
+      {
+        engine: 'mongodb',
+        query: `count by (agent_id, site_id) (mongodb_connections${sel})`,
+      },
+      {
+        engine: 'redis',
+        query: `count by (agent_id, site_id) (redis_uptime${sel})`,
+      },
+      {
+        engine: 'redis',
+        query: `count by (agent_id, site_id) (redis_clients${sel})`,
+      },
       { engine: 'datastore', query: `ekms_datastore_up${sel}` },
     ]);
   }
 
-  private async listNetworkDevices(tenantSlug = ''): Promise<DashboardTarget[]> {
+  private async listNetworkDevices(
+    tenantSlug = '',
+  ): Promise<DashboardTarget[]> {
     const sel = this.tenantSelector(tenantSlug);
     return this.collectTargets(tenantSlug, [
       {
@@ -621,10 +762,22 @@ export class DashboardService {
   private async listQueues(tenantSlug = ''): Promise<DashboardTarget[]> {
     const sel = this.tenantSelector(tenantSlug);
     return this.collectTargets(tenantSlug, [
-      { engine: 'kafka', query: `count by (agent_id, site_id) (kafka_brokers${sel})` },
-      { engine: 'rabbitmq', query: `count by (agent_id, site_id) (rabbitmq_consumer_count${sel})` },
-      { engine: 'rabbitmq', query: `count by (agent_id, site_id) (rabbitmq_message_current${sel})` },
-      { engine: 'nats', query: `count by (agent_id, site_id) (nats_varz_connections${sel})` },
+      {
+        engine: 'kafka',
+        query: `count by (agent_id, site_id) (kafka_brokers${sel})`,
+      },
+      {
+        engine: 'rabbitmq',
+        query: `count by (agent_id, site_id) (rabbitmq_consumer_count${sel})`,
+      },
+      {
+        engine: 'rabbitmq',
+        query: `count by (agent_id, site_id) (rabbitmq_message_current${sel})`,
+      },
+      {
+        engine: 'nats',
+        query: `count by (agent_id, site_id) (nats_varz_connections${sel})`,
+      },
     ]);
   }
 
@@ -655,7 +808,13 @@ export class DashboardService {
       rejected: null,
       services: [],
       probes: [],
-      series: { sessions: [], memory: [], smtp: [], defense: [], probesRtt: [] },
+      series: {
+        sessions: [],
+        memory: [],
+        smtp: [],
+        defense: [],
+        probesRtt: [],
+      },
     };
   }
 
@@ -668,7 +827,10 @@ export class DashboardService {
   }
 
   // IceWarp 14.x publica VSZ en INTEGER con signo. Si pasa de 2 GiB, llega negativo.
-  private icewarpWorkingSetBytes(raw: number | null | undefined, running = true): number | null {
+  private icewarpWorkingSetBytes(
+    raw: number | null | undefined,
+    running = true,
+  ): number | null {
     if (!running || raw == null || !Number.isFinite(raw)) {
       return null;
     }
@@ -783,13 +945,19 @@ export class DashboardService {
           uptimeSeconds: this.icewarpUptimeSeconds(upMap.get(name)),
           sessions: sessMap.get(name) ?? null,
           sessionsPeak: peakMap.get(name) ?? null,
-          workingSetBytes: this.icewarpWorkingSetBytes(memMap.get(name), running),
+          workingSetBytes: this.icewarpWorkingSetBytes(
+            memMap.get(name),
+            running,
+          ),
         };
       });
     const rttMap = new Map(
       probesRtt
         .filter((row) => Number.isFinite(row.value))
-        .map((row) => [row.metric.name || row.metric.endpoint || 'probe', row.value]),
+        .map((row) => [
+          row.metric.name || row.metric.endpoint || 'probe',
+          row.value,
+        ]),
     );
     const probes = probesUp.map((row) => {
       const name = row.metric.name || row.metric.endpoint || 'probe';
@@ -804,12 +972,17 @@ export class DashboardService {
     const smtpInValue = first(smtpIn);
     const smtpOutValue = first(smtpOut);
     const smtpFailedValue = first(smtpFailed);
-    const rejectedParts = [smtpFailed, virus, cf, dnsbl, tarpit, spam].map((rows) => first(rows));
+    const rejectedParts = [smtpFailed, virus, cf, dnsbl, tarpit, spam].map(
+      (rows) => first(rows),
+    );
     const rejected = rejectedParts.every((value) => value === null)
       ? null
       : rejectedParts.reduce<number>((sum, value) => sum + (value ?? 0), 0);
     const named = (
-      rows: Array<{ metric: Record<string, string>; values: Array<[number, number]> }>,
+      rows: Array<{
+        metric: Record<string, string>;
+        values: Array<[number, number]>;
+      }>,
       label: (metric: Record<string, string>) => string,
     ) => this.named(rows, label);
     const inventoryName =
@@ -830,16 +1003,22 @@ export class DashboardService {
       services,
       probes,
       series: {
-        sessions: named(sessionsSeries, (metric) => this.icewarpSvcName(metric)),
+        sessions: named(sessionsSeries, (metric) =>
+          this.icewarpSvcName(metric),
+        ),
         memory: named(
           memSeries
-            .filter((row) => (runMap.get(this.icewarpSvcName(row.metric)) ?? 0) >= 1)
+            .filter(
+              (row) => (runMap.get(this.icewarpSvcName(row.metric)) ?? 0) >= 1,
+            )
             .map((row) => ({
               metric: row.metric,
               values: row.values
                 .map(([time, value]) => {
                   const bytes = this.icewarpWorkingSetBytes(value, true);
-                  return bytes == null ? null : ([time, bytes] as [number, number]);
+                  return bytes == null
+                    ? null
+                    : ([time, bytes] as [number, number]);
                 })
                 .filter((point): point is [number, number] => point != null),
             })),
@@ -920,7 +1099,11 @@ export class DashboardService {
     return this.labelByKey(rows, 'agent_id', key);
   }
 
-  private labelByKey(rows: InstantRow[], idKey: string, valueKey: string): Map<string, string> {
+  private labelByKey(
+    rows: InstantRow[],
+    idKey: string,
+    valueKey: string,
+  ): Map<string, string> {
     const values = new Map<string, string>();
     for (const row of rows) {
       const id = row.metric[idKey]?.trim();
@@ -1030,7 +1213,8 @@ export class DashboardService {
         const usedBytes = this.telemetry.first(usedRow ? [usedRow] : []) ?? 0;
         const freeBytes = this.telemetry.first(freeRow ? [freeRow] : []) ?? 0;
         const totalBytes =
-          this.telemetry.first(totalRow ? [totalRow] : []) ?? usedBytes + freeBytes;
+          this.telemetry.first(totalRow ? [totalRow] : []) ??
+          usedBytes + freeBytes;
         return {
           mount: metric.mountpoint || '/',
           device: metric.device || '',
@@ -1045,7 +1229,10 @@ export class DashboardService {
   }
 
   private named(
-    rows: Array<{ metric: Record<string, string>; values: Array<[number, number]> }>,
+    rows: Array<{
+      metric: Record<string, string>;
+      values: Array<[number, number]>;
+    }>,
     label: (metric: Record<string, string>) => string,
   ) {
     return rows.map((row) => ({
@@ -1077,7 +1264,11 @@ export class DashboardService {
     }
   }
 
-  private windowFor(rangeInput?: string): { seconds: number; step: number; rate: string } {
+  private windowFor(rangeInput?: string): {
+    seconds: number;
+    step: number;
+    rate: string;
+  } {
     const catalog: Record<string, number> = {
       '1m': 60,
       '5m': 300,
@@ -1129,7 +1320,11 @@ export class DashboardService {
     window: { seconds: number; step: number },
   ) {
     try {
-      return await this.telemetry.lokiRange(query, window.seconds, Math.max(15, window.step));
+      return await this.telemetry.lokiRange(
+        query,
+        window.seconds,
+        Math.max(15, window.step),
+      );
     } catch {
       return [];
     }

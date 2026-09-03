@@ -1,0 +1,32 @@
+@if (widgets().length === 0) {
+  <eku-empty-state title="Sin widgets" [message]="emptyMessage()" />
+} @else {
+  <div class="board-preview__grid">
+    @for (widget of widgets(); track widget.id) {
+      <article
+        class="board-preview__widget"
+        [class.is-ok]="widget.type === 'status-agent' && hostOf(widget)?.online"
+        [class.is-crit]="widget.type === 'status-agent' && hostOf(widget) && !hostOf(widget)?.online"
+        [style.--w]="widget.w"
+        [style.--h]="widget.h"
+      >
+        <header>
+          <span>{{ widget.title }}</span>
+          <small>{{ hostOf(widget)?.id || '—' }}</small>
+        </header>
+        @if (chartOf(widget); as option) {
+          <eku-chart [option]="option" />
+        } @else if (widget.type === 'chart-network') {
+          @if (nicOf(widget); as nic) {
+            <strong>{{ rateOf(nic.rxBytesPerSec) }}</strong>
+            <p>Subida {{ rateOf(nic.txBytesPerSec) }} · {{ nic.device }}</p>
+          } @else {
+            <strong>—</strong>
+          }
+        } @else {
+          <strong>{{ valueOf(widget) }}</strong>
+        }
+      </article>
+    }
+  </div>
+}

@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -23,9 +23,33 @@ type EnrolledAgent = {
   yaml: string;
 };
 
+type BoardOption = {
+  id: string;
+  name: string;
+  site?: { id: string; slug: string; name: string } | null;
+};
+
+type KioskDevice = {
+  id: string;
+  name: string;
+  tenant: string;
+  site: string;
+  dashboard: string;
+  credentialExpiresAt: string;
+  revokedAt: string | null;
+  lastSeenAt: string | null;
+  secret?: string;
+};
+
 @Component({
   selector: 'app-admin-sites-page',
-  imports: [ReactiveFormsModule, MatIcon, MatTooltip, EkuPageHeaderComponent, EkuErrorStateComponent],
+  imports: [
+    ReactiveFormsModule,
+    MatIcon,
+    MatTooltip,
+    EkuPageHeaderComponent,
+    EkuErrorStateComponent,
+  ],
   templateUrl: './admin-sites-page.html',
   styleUrl: './admin-sites-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -45,6 +69,11 @@ export class AdminSitesPage {
   protected readonly error = signal<string | null>(null);
   protected readonly saving = signal(false);
   protected readonly enrolled = signal<EnrolledAgent | null>(null);
+  protected readonly kiosks = signal<KioskDevice[]>([]);
+  protected readonly boards = signal<BoardOption[]>([]);
+  protected readonly kioskOpen = signal(false);
+  protected readonly kioskCredential = signal<KioskDevice | null>(null);
+  protected readonly kioskSecretVisible = signal(false);
   protected readonly modes = [
     { value: 'site', label: 'Servidor' },
     { value: 'central', label: 'NOC' },
@@ -62,10 +91,24 @@ export class AdminSitesPage {
     siteId: ['local', [Validators.required, Validators.pattern(/^[A-Za-z0-9._-]+$/)]],
     mode: ['site', Validators.required],
   });
+  protected readonly kioskForm = this.fb.nonNullable.group({
+    name: ['', [Validators.required, Validators.minLength(2)]],
+    site: ['', Validators.required],
+    dashboard: ['', Validators.required],
+  });
+  protected readonly dashboards = computed(() =>
+    this.boards().map((item) => ({
+      value: `custom:${item.id}`,
+      label: item.site ? `${item.name} · ${item.site.name}` : item.name,
+    })),
+  );
 
   constructor() {
     this.tenants.load();
-    this.reload();
+    effect(() => {
+      this.tenants.slug();
+      untracked(() => this.reload());
+    });
   }
 
   protected fieldInvalid(
@@ -100,6 +143,96 @@ export class AdminSitesPage {
       siteId: this.items()[0]?.slug ?? 'local',
       mode: 'site',
     });
+  }
+
+  protected toggleKiosk(): void {
+    this.kioskOpen.update((open) => !open);
+    this.error.set(null);
+    this.kioskForm.reset({
+      name: '',
+      site: this.items()[0]?.slug ?? '',
+      dashboard: this.dashboards()[0]?.value ?? '',
+    });
+  }
+
+  protected submitKiosk(): void {
+    if (this.kioskForm.invalid) {
+      this.kioskForm.markAllAsTouched();
+      return;
+    }
+    this.saving.set(true);
+    this.error.set(null);
+    this.http
+      .post<KioskDevice>(`${API_BASE_URL}/v1/kiosk/devices`, {
+        ...this.kioskForm.getRawValue(),
+        tenant: this.tenants.slug(),
+      })
+      .subscribe({
+        next: (device) => {
+          this.saving.set(false);
+          this.kioskSecretVisible.set(false);
+          this.kioskCredential.set(device);
+          this.kioskOpen.set(false);
+          this.reloadKiosks();
+        },
+        error: (err: { error?: { message?: string } }) => {
+          this.saving.set(false);
+          this.error.set(err.error?.message ?? 'No se pudo crear la pantalla de monitoreo.');
+        },
+      });
+  }
+
+  protected removeKiosk(device: KioskDevice): void {
+    if (!window.confirm(`¿Eliminar la pantalla ${device.name}?`)) return;
+    this.http.delete(`${API_BASE_URL}/v1/kiosk/devices/${device.id}`).subscribe({
+      next: () => {
+        if (this.kioskCredential()?.id === device.id) {
+          this.kioskCredential.set(null);
+        }
+        this.reloadKiosks();
+      },
+      error: (err: { error?: { message?: string } }) =>
+        this.error.set(err.error?.message ?? 'No se pudo eliminar la pantalla.'),
+    });
+  }
+
+  protected rotateKiosk(device: KioskDevice): void {
+    this.http
+      .post<KioskDevice>(`${API_BASE_URL}/v1/kiosk/devices/${device.id}/rotate`, {})
+      .subscribe({
+        next: (rotated) => {
+          this.kioskSecretVisible.set(false);
+          this.kioskCredential.set(rotated);
+          this.reloadKiosks();
+        },
+        error: (err: { error?: { message?: string } }) =>
+          this.error.set(err.error?.message ?? 'No se pudo rotar la credencial.'),
+      });
+  }
+
+  protected kioskActivationUrl(device: KioskDevice): string {
+    return `${location.origin}/kiosk/activar?id=${encodeURIComponent(device.id)}`;
+  }
+
+  protected copyKioskCredential(device: KioskDevice): void {
+    const text = `URL: ${this.kioskActivationUrl(device)}\nID: ${device.id}\nCredencial: ${device.secret ?? ''}`;
+    void navigator.clipboard.writeText(text);
+  }
+
+  protected kioskSiteName(device: KioskDevice): string {
+    return this.items().find((item) => item.slug === device.site)?.name ?? device.site;
+  }
+
+  protected kioskDashboardName(device: KioskDevice): string {
+    const boardId = device.dashboard.startsWith('custom:')
+      ? device.dashboard.slice('custom:'.length)
+      : '';
+    return this.boards().find((item) => item.id === boardId)?.name ?? device.dashboard;
+  }
+
+  protected kioskStatus(device: KioskDevice): string {
+    if (device.revokedAt) return 'Revocada';
+    return device.lastSeenAt ? 'Conectada' : 'Pendiente de activación';
   }
 
   protected editSite(item: TenantSite): void {
@@ -171,7 +304,10 @@ export class AdminSitesPage {
     const value = this.siteForm.getRawValue();
     const editingId = this.editingSiteId();
     const request = editingId
-      ? this.http.patch<TenantSite>(`${API_BASE_URL}/v1/tenants/${slug}/sites/${editingId}?as=${slug}`, value)
+      ? this.http.patch<TenantSite>(
+          `${API_BASE_URL}/v1/tenants/${slug}/sites/${editingId}?as=${slug}`,
+          value,
+        )
       : this.http.post<TenantSite>(`${API_BASE_URL}/v1/tenants/${slug}/sites?as=${slug}`, {
           name: value.name,
           slug: value.slug || undefined,
@@ -186,7 +322,10 @@ export class AdminSitesPage {
       },
       error: (err: { error?: { message?: string } }) => {
         this.saving.set(false);
-        this.error.set(err.error?.message ?? (editingId ? 'No se pudo guardar el sitio.' : 'No se pudo crear el sitio.'));
+        this.error.set(
+          err.error?.message ??
+            (editingId ? 'No se pudo guardar el sitio.' : 'No se pudo crear el sitio.'),
+        );
       },
     });
   }
@@ -212,11 +351,17 @@ export class AdminSitesPage {
     const editingId = this.editingAgentId();
     const value = this.agentForm.getRawValue();
     const request = editingId
-      ? this.http.patch<EnrolledAgent>(`${API_BASE_URL}/v1/tenants/${slug}/agents/${editingId}?as=${slug}`, {
-          siteId: value.siteId,
-          mode: value.mode,
-        })
-      : this.http.post<EnrolledAgent>(`${API_BASE_URL}/v1/tenants/${slug}/agents?as=${slug}`, value);
+      ? this.http.patch<EnrolledAgent>(
+          `${API_BASE_URL}/v1/tenants/${slug}/agents/${editingId}?as=${slug}`,
+          {
+            siteId: value.siteId,
+            mode: value.mode,
+          },
+        )
+      : this.http.post<EnrolledAgent>(
+          `${API_BASE_URL}/v1/tenants/${slug}/agents?as=${slug}`,
+          value,
+        );
     request.subscribe({
       next: (agent) => {
         this.saving.set(false);
@@ -228,7 +373,10 @@ export class AdminSitesPage {
       },
       error: (err: { error?: { message?: string } }) => {
         this.saving.set(false);
-        this.error.set(err.error?.message ?? (editingId ? 'No se pudo guardar el agente.' : 'No se pudo agregar el agente.'));
+        this.error.set(
+          err.error?.message ??
+            (editingId ? 'No se pudo guardar el agente.' : 'No se pudo agregar el agente.'),
+        );
       },
     });
   }
@@ -241,11 +389,28 @@ export class AdminSitesPage {
         this.error.set(err.error?.message ?? 'No se pudieron cargar los sitios.');
       },
     });
-    this.http.get<EnrolledAgent[]>(`${API_BASE_URL}/v1/tenants/${slug}/agents?as=${slug}`).subscribe({
-      next: (agents) => this.agents.set(agents),
-      error: (err: { error?: { message?: string } }) => {
-        this.error.set(err.error?.message ?? 'No se pudieron cargar los agentes.');
-      },
+    this.http
+      .get<EnrolledAgent[]>(`${API_BASE_URL}/v1/tenants/${slug}/agents?as=${slug}`)
+      .subscribe({
+        next: (agents) => this.agents.set(agents),
+        error: (err: { error?: { message?: string } }) => {
+          this.error.set(err.error?.message ?? 'No se pudieron cargar los agentes.');
+        },
+      });
+    this.reloadKiosks();
+    this.http
+      .get<BoardOption[]>(`${API_BASE_URL}/v1/boards`, { params: { tenant: slug } })
+      .subscribe({
+        next: (rows) => this.boards.set(rows),
+      });
+  }
+
+  private reloadKiosks(): void {
+    const tenant = encodeURIComponent(this.tenants.slug());
+    this.http.get<KioskDevice[]>(`${API_BASE_URL}/v1/kiosk/devices?tenant=${tenant}`).subscribe({
+      next: (devices) => this.kiosks.set(devices),
+      error: (err: { error?: { message?: string } }) =>
+        this.error.set(err.error?.message ?? 'No se pudieron cargar las pantallas.'),
     });
   }
 }

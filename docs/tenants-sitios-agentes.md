@@ -50,6 +50,17 @@ El login no pide tenant: Keycloak lo lleva en el token. Un admin de Acme no pued
 
 El tenant `default` es Gradotech. No se recrea.
 
+### Modelo de autorización y límite de confianza
+
+La API es la autoridad; ocultar un botón o una ruta en Angular nunca concede ni revoca permisos. El guard global rechaza por defecto cualquier controlador que no declare roles explícitos. Solo los endpoints marcados deliberadamente como públicos omiten autenticación. Cada controlador protegido exige uno o más roles y el servicio vuelve a limitar las consultas y mutaciones por tenant.
+
+- `operator` puede actuar sobre otro tenant únicamente seleccionándolo explícitamente; las operaciones reservadas de plataforma, como crear o eliminar tenants, además exigen que el actor pertenezca a `default`.
+- `admin` queda fijado al tenant del access token. Los parámetros `as`, `tenant`, `tenant_id` y `X-Eku-Tenant` no pueden ampliar ese alcance.
+- `viewer` solo consulta datos de su tenant y no accede a administración.
+- `kiosk` se autentica como dispositivo, solo entra a endpoints expresamente habilitados y queda fijado al tenant, sitio y dashboard de su identidad. La API elimina del response las familias de datos ajenas a ese dashboard.
+
+Las consultas de usuarios, sitios, agentes y dispositivos combinan el identificador del recurso con el tenant autorizado; una referencia válida de otro cliente se rechaza antes de consultar o mutar ese recurso. Las pruebas negativas de API cubren sesión ausente, RBAC, parámetros manipulados, enrolamiento cross-tenant y alcance kiosk. Toda nueva operación debe añadir una prueba negativa equivalente antes de considerarse terminada.
+
 ## Sitio
 
 Es una sede, planta o zona **dentro** de un tenant. Sirve para partir dashboards, agregados y el recuento de agentes.
@@ -90,7 +101,7 @@ El botón no despliega software. Hace tres cosas:
 
 Sin ese alta, el binario no sabría a qué cliente y sede reportar, y el portal no tendría ficha para contar agentes por sitio.
 
-Tras inscribir, hay que instalar el paquete del agente en la máquina, pegar el YAML y, en laboratorio, apuntar `export.otlp.endpoint` a la plataforma.
+Tras inscribir, hay que instalar el paquete del agente en la máquina, pegar el YAML y apuntar `export.otlp.endpoint` al gateway de la plataforma.
 
 ## Tipos de agente (nombres comerciales)
 
@@ -145,7 +156,7 @@ Zabbix no usa estos tipos. Equivalencia aproximada:
 
 ## Relación con el login
 
-El alta de usuario (Usuarios o primer admin del tenant) crea la cuenta en Prisma y en Keycloak: mismo correo, atributo `tenant` = slug, rol `admin` o `viewer`. La contraseña inicial se muestra una vez; el primer ingreso obliga a cambiarla. El operador y el admin de laboratorio (`operator@`, `admin@`) no pasan por ese cambio.
+El alta de usuario (Usuarios o primer admin del tenant) crea la cuenta en Prisma y en Keycloak: mismo correo, atributo `tenant` = slug, rol `admin` o `viewer`. La contraseña inicial se muestra una vez; el primer ingreso obliga a cambiarla. Las cuentas de demostración (`operator@`, `admin@`) no pasan por ese cambio.
 
 ## Dónde se opera en el portal
 
@@ -158,5 +169,5 @@ El alta de usuario (Usuarios o primer admin del tenant) crea la cuenta en Prisma
 
 ## Referencias
 
-- Contrato de identidad del agente: `docs/adr/0001-stack-y-contrato-agente.md`
+- Contrato de identidad y límites de confianza: `docs/architecture.md`
 - Rol y capacidades del binario: `ekumetrics-agent/docs/ROL.md` y `ekumetrics-agent/docs/USO.md`

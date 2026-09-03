@@ -19,161 +19,40 @@
   background: var(--eku-aside-hover);
 }
 
-.agent__section {
-  margin: 0 0 var(--eku-space-3);
-  font-size: 1rem;
+.agent__step {
+  margin: 0 0 var(--eku-space-6);
 }
 
-.agent__section--later {
-  margin-top: var(--eku-space-6);
-}
-
-.agent__modules {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-  gap: var(--eku-space-4);
-}
-
-.agent__module {
-  display: flex;
-  flex-direction: column;
-  min-height: 12rem;
-  padding: var(--eku-space-4);
-  background: var(--eku-surface);
-  border: 1px solid var(--eku-border);
-}
-
-.agent__module-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: var(--eku-space-3);
-}
-
-.agent__dot {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 50%;
-  background: var(--eku-unknown);
-  flex-shrink: 0;
-}
-
-.agent__dot.is-on {
-  background: var(--eku-healthy);
-}
-
-.agent__module-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  margin-bottom: var(--eku-space-3);
-  background: var(--eku-primary-muted);
-  color: var(--eku-primary);
-}
-
-.agent__module-icon .mat-icon {
-  color: var(--eku-primary);
-}
-
-.agent__module h3 {
-  margin: 0 0 var(--eku-space-1);
-  font-size: 1rem;
-}
-
-.agent__module-key {
-  margin: 0 0 var(--eku-space-3);
-  color: var(--eku-text-secondary);
-  font-family: var(--eku-font-mono);
-  font-size: 0.72rem;
-  line-height: 1.4;
-}
-
-.agent__module-cap {
-  flex: 1;
-  margin: 0 0 var(--eku-space-3);
-  color: var(--eku-text-primary);
-  line-height: 1.45;
-}
-
-.agent__grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--eku-space-3);
-  align-items: stretch;
-}
-
-.agent__card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--eku-space-3);
-  height: 100%;
-  padding: var(--eku-space-3);
-  background: var(--eku-surface);
-  border: 1px solid var(--eku-border);
-}
-
-.agent__card-top {
-  display: grid;
-  grid-template-columns: 2.75rem minmax(0, 1fr);
-  gap: var(--eku-space-3);
-  align-items: center;
-  min-height: 2.75rem;
-}
-
-.agent__card-copy h3 {
-  margin: 0;
-  font-size: 0.95rem;
-  line-height: 1.3;
-}
-
-.agent__card-copy p {
-  margin: 0.15rem 0 0;
-  color: var(--eku-text-secondary);
-  font-size: 0.75rem;
-}
-
-.agent__os {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.1rem;
-  width: 2.75rem;
-  height: 2.75rem;
-  background: var(--eku-primary-muted);
-  color: var(--eku-primary);
-}
-
-.agent__os .mat-icon {
+.agent__step h2 {
+  margin: 0 0 var(--eku-space-2);
   font-size: 1.15rem;
-  width: 1.15rem;
-  height: 1.15rem;
-  color: var(--eku-primary);
 }
 
-.agent__os span {
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+.agent__step h3 {
+  margin: var(--eku-space-4) 0 var(--eku-space-2);
+  font-size: 0.95rem;
+}
+
+.agent__step > p {
+  margin: 0 0 var(--eku-space-3);
+  color: var(--eku-text-secondary);
+}
+
+.agent__step .eku-form {
+  margin-bottom: 0;
 }
 
 .agent__command {
   font-family: var(--eku-font-mono);
   margin: 0;
-  height: 3.4rem;
-  padding: 0.5rem 0.6rem;
+  padding: 0.85rem 1rem;
   background: var(--eku-surface-container);
   border: 1px solid var(--eku-border);
   color: var(--eku-text-primary);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   white-space: pre-wrap;
-  font-size: 0.72rem;
-  line-height: 1.45;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  overflow-x: auto;
 }
 
 .agent__download {
@@ -181,13 +60,12 @@
   align-items: center;
   justify-content: center;
   gap: var(--eku-space-2);
-  width: 100%;
-  min-height: 2.15rem;
-  margin-top: auto;
-  padding: 0 0.75rem;
+  min-height: 2.5rem;
+  margin-top: var(--eku-space-4);
+  padding: 0 1rem;
   background: var(--eku-primary);
   color: var(--eku-on-primary);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   text-decoration: none;
 }
 
@@ -201,8 +79,7 @@
 }
 
 @media (max-width: 47.99rem) {
-  .agent__grid,
-  .agent__modules {
-    grid-template-columns: 1fr;
+  .agent__download {
+    width: 100%;
   }
 }

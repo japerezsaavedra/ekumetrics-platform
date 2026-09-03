@@ -3,7 +3,13 @@
     title="EkuAssistant AI"
     subtitle="Asistente de operaciones: analiza métricas y registros de sus agentes y responde solo a lo que pregunte."
   >
-    <button ekuActions class="holmes__ghost" type="button" (click)="startNew()" [disabled]="loading()">
+    <button
+      ekuActions
+      class="holmes__ghost"
+      type="button"
+      (click)="startNew()"
+      [disabled]="loading()"
+    >
       Nueva sesion
     </button>
   </eku-page-header>
@@ -41,7 +47,11 @@
           }
           @for (msg of messages(); track $index) {
             <article class="holmes__row" [class.holmes__row--user]="msg.role === 'user'">
-              <span class="holmes__avatar" [class.holmes__avatar--user]="msg.role === 'user'" aria-hidden="true">
+              <span
+                class="holmes__avatar"
+                [class.holmes__avatar--user]="msg.role === 'user'"
+                aria-hidden="true"
+              >
                 <mat-icon>{{ msg.role === 'user' ? 'person' : 'smart_toy' }}</mat-icon>
               </span>
               <div class="holmes__msg" [class.holmes__msg--user]="msg.role === 'user'">
@@ -52,6 +62,89 @@
                   <p class="holmes__plain">{{ msg.text }}</p>
                 } @else {
                   <eku-markdown [text]="msg.text" />
+                  @if (msg.investigation; as investigation) {
+                    @if (investigation.outcome !== 'no_data') {
+                    <section
+                      class="holmes__investigation"
+                      [class]="
+                        'holmes__investigation holmes__investigation--' + investigation.outcome
+                      "
+                      aria-label="Cobertura y confianza de la investigación"
+                    >
+                      <div class="holmes__investigation-summary">
+                        <strong>{{ outcomeLabel(investigation.outcome) }}</strong>
+                        <span>
+                          Confianza {{ confidenceLabel(investigation.confidence.level) }} ·
+                          {{ confidencePercent(investigation.confidence.score) }}%
+                        </span>
+                      </div>
+                      <p>{{ investigation.confidence.reason }}</p>
+                      <ul aria-label="Estado de las fuentes consultadas">
+                        @for (source of investigationSources(investigation); track source.source) {
+                          <li [class]="'is-' + source.state">
+                            <span>{{ sourceLabel(source.source) }}</span>
+                            <strong>{{ sourceStateLabel(source.state) }}</strong>
+                          </li>
+                        }
+                      </ul>
+                      <small>
+                        Ventana: {{ formatWhen(investigation.window.start) }} –
+                        {{ formatWhen(investigation.window.end) }}
+                      </small>
+                    </section>
+                    }
+                  }
+                  @if (evidenceItems(msg.evidence); as evidence) {
+                    @if (evidence.length) {
+                      <details class="holmes__evidence">
+                        <summary>
+                          <mat-icon aria-hidden="true">fact_check</mat-icon>
+                          Evidencia consultada ({{ evidence.length }})
+                        </summary>
+                        <ul>
+                          @for (item of evidence; track item.id) {
+                            <li>
+                              <div class="holmes__evidence-head">
+                                @if (item.citation) {
+                                  <code class="holmes__citation">{{ item.citation }}</code>
+                                }
+                                <strong>{{ sourceLabel(item.source) }}</strong>
+                                <span>{{ item.summary }}</span>
+                              </div>
+                              @for (reference of item.references ?? []; track $index) {
+                                @if (reference.traceId) {
+                                  <div class="holmes__trace">
+                                    <code>{{ reference.traceId }}</code>
+                                    <span>
+                                      {{ reference.service || 'servicio sin nombre' }} ·
+                                      {{ reference.operation || 'operación sin nombre' }} ·
+                                      {{ reference.durationMs ?? 0 }} ms
+                                    </span>
+                                    @if (reference.spanIds?.length) {
+                                      <small>spans: {{ reference.spanIds?.join(', ') }}</small>
+                                    }
+                                  </div>
+                                } @else if (reference.documentId) {
+                                  <div class="holmes__trace">
+                                    <strong>{{ reference.title }}</strong>
+                                    <span>
+                                      {{ reference.section || 'Documento completo' }} · versión
+                                      {{ reference.version }}
+                                    </span>
+                                    <small>
+                                      Aprobado
+                                      {{ formatWhen(reference.approvedAt || item.timestamp) }} ·
+                                      {{ reference.sourceKey }}
+                                    </small>
+                                  </div>
+                                }
+                              }
+                            </li>
+                          }
+                        </ul>
+                      </details>
+                    }
+                  }
                 }
               </div>
             </article>
@@ -105,7 +198,11 @@
           <ul>
             @for (item of conversations(); track item.id) {
               <li [class.is-active]="item.id === activeId()">
-                <button type="button" class="holmes__history-item" (click)="openConversation(item.id)">
+                <button
+                  type="button"
+                  class="holmes__history-item"
+                  (click)="openConversation(item.id)"
+                >
                   <span class="holmes__history-title">{{ item.title }}</span>
                   <span class="holmes__history-when">
                     {{ formatWhen(item.updatedAt) }}

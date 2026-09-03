@@ -1,14 +1,15 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatIcon } from '@angular/material/icon';
-import { API_BASE_URL } from '../../core/api';
-import { TenantService } from '../../core/tenant';
+import { startWith } from 'rxjs';
 import { EkuErrorStateComponent } from '../../shared/eku/error-state/eku-error-state';
 import { EkuPageHeaderComponent } from '../../shared/eku/page-header/eku-page-header';
 
-const FALLBACK_VERSION = '1.4.1';
+const FALLBACK_VERSION = '1.4.4';
 const RELEASES_REPO = 'japerezsaavedra/ekumetrics-agent-releases';
-const RELEASES_API = `https://api.github.com/repos/${RELEASES_REPO}/releases/latest`;
+const RELEASES_API = `https://api.github.com/repos/${RELEASES_REPO}/releases?per_page=12`;
 const RELEASES_PAGE = `https://github.com/${RELEASES_REPO}/releases`;
 
 type GithubAsset = {
@@ -21,25 +22,27 @@ function versionFromTag(tag: string): string {
   return tag.trim().replace(/^v/i, '');
 }
 
+function catalogAsset(version: string, name: string): GithubAsset {
+  return {
+    name,
+    browser_download_url: `https://github.com/${RELEASES_REPO}/releases/download/v${version}/${name}`,
+    size: 0,
+  };
+}
+
 function catalogAssets(version: string): GithubAsset[] {
-  const base = `https://github.com/${RELEASES_REPO}/releases/download/v${version}`;
   return [
-    {
-      name: `ekumetrics-agent_${version}-1_amd64.deb`,
-      browser_download_url: `${base}/ekumetrics-agent_${version}-1_amd64.deb`,
-      size: 0,
-    },
-    {
-      name: `ekumetrics-agent-${version}-1.x86_64.rpm`,
-      browser_download_url: `${base}/ekumetrics-agent-${version}-1.x86_64.rpm`,
-      size: 0,
-    },
-    {
-      name: `ekumetrics-agent-${version}-linux-amd64.tar.gz`,
-      browser_download_url: `${base}/ekumetrics-agent-${version}-linux-amd64.tar.gz`,
-      size: 0,
-    },
+    catalogAsset(version, `ekumetrics-agent_${version}-1_amd64.deb`),
+    catalogAsset(version, `ekumetrics-agent-${version}-1.x86_64.rpm`),
+    catalogAsset(version, `ekumetrics-agent-${version}-linux-amd64.tar.gz`),
+    catalogAsset(version, 'ekumetrics-agent-linux-amd64'),
+    catalogAsset(version, `ekumetrics-agent-${version}-windows-amd64.msi`),
+    catalogAsset(version, `ekumetrics-agent-${version}-windows-amd64.zip`),
   ];
+}
+
+function pickAsset(assets: GithubAsset[], test: (name: string) => boolean): GithubAsset | null {
+  return assets.find((item) => test(item.name)) ?? null;
 }
 
 type GithubRelease = {
@@ -51,329 +54,156 @@ type GithubRelease = {
   assets: GithubAsset[];
 };
 
-type AgentModule = {
-  key: string;
-  name: string;
-  icon: string;
-  capability: string;
-  onByDefault: boolean;
-};
+type OsId = 'linux' | 'windows';
+type DistroId = 'deb' | 'rpm' | 'tgz' | 'bin' | 'msi' | 'zip';
 
-type ModuleGroup = {
-  id: string;
-  label: string;
-  modules: AgentModule[];
-};
-
-type InstallerCard = {
-  id: string;
+type DistroOption = {
+  id: DistroId;
+  os: OsId;
   title: string;
-  os: string;
   hint: string;
-  icon: string;
-  badge: string;
-  command: string;
-  asset: GithubAsset | null;
+  install: (version: string) => string;
+  verify: string;
+  match: (name: string) => boolean;
 };
 
-const MODULE_GROUPS: ModuleGroup[] = [
+const DISTROS: DistroOption[] = [
   {
-    id: 'host',
-    label: 'Este servidor',
-    modules: [
-      {
-        key: 'metrics.host',
-        name: 'Host',
-        icon: 'memory',
-        capability: 'CPU, memoria, disco, filesystem, load y NICs de esta máquina.',
-        onByDefault: true,
-      },
-      {
-        key: 'metrics.processes',
-        name: 'Procesos',
-        icon: 'account_tree',
-        capability: 'CPU, memoria y E/S de procesos listados en names.',
-        onByDefault: false,
-      },
-      {
-        key: 'logs',
-        name: 'Logs',
-        icon: 'description',
-        capability: 'journald, Event Log, ficheros o logs OTLP de esta maquina.',
-        onByDefault: false,
-      },
-    ],
+    id: 'deb',
+    os: 'linux',
+    title: 'Debian / Ubuntu',
+    hint: 'Paquete .deb · amd64',
+    install: (version) =>
+      `sudo apt-get install -y ./ekumetrics-agent_${version}-1_amd64.deb`,
+    verify: 'sudo systemctl status ekumetrics-agent\ncurl -s http://127.0.0.1:9090/healthz',
+    match: (name) => name.endsWith('.deb'),
   },
   {
-    id: 'sede',
-    label: 'Componentes de sede',
-    modules: [
-      {
-        key: 'snmp.devices',
-        name: 'SNMP',
-        icon: 'router',
-        capability: 'Cualquier dispositivo v2c/v3 (puerto 161). Se declara en snmp.devices. Perfiles if-mib, host-mib, ups e icewarp.',
-        onByDefault: false,
-      },
-      {
-        key: 'databases',
-        name: 'Bases de datos',
-        icon: 'storage',
-        capability: 'PostgreSQL, MySQL, Redis y MongoDB. Cuenta de solo lectura.',
-        onByDefault: false,
-      },
-      {
-        key: 'queues',
-        name: 'Colas',
-        icon: 'hub',
-        capability: 'Kafka, RabbitMQ y NATS. No lee el payload de los mensajes.',
-        onByDefault: false,
-      },
-      {
-        key: 'icewarp',
-        name: 'IceWarp',
-        icon: 'mail',
-        capability: 'MIB propia en puerto 1161, probes SMTP/IMAP/HTTPS y logs.',
-        onByDefault: false,
-      },
-    ],
+    id: 'rpm',
+    os: 'linux',
+    title: 'Rocky / AlmaLinux / RHEL',
+    hint: 'Paquete .rpm · x86_64',
+    install: (version) => `sudo dnf install -y ./ekumetrics-agent-${version}-1.x86_64.rpm`,
+    verify: 'sudo systemctl status ekumetrics-agent\ncurl -s http://127.0.0.1:9090/healthz',
+    match: (name) => name.endsWith('.rpm'),
   },
   {
-    id: 'sap',
-    label: 'SAP (sensor)',
-    modules: [
-      {
-        key: 'sap',
-        name: 'Canal SAP',
-        icon: 'lan',
-        capability: 'Solo en mode: sensor (SPAN/PCAP o TAP). Sesiones, bytes, RTT y retransmisiones. No va en el YAML de sede.',
-        onByDefault: false,
-      },
-      {
-        key: 'sap.decode.authorized',
-        name: 'Decode SAP',
-        icon: 'policy',
-        capability: 'Clasifica DIAG, RFC y Message Server solo en claro y con permiso. No descifra SNC/TLS.',
-        onByDefault: false,
-      },
-      {
-        key: 'sap.work',
-        name: 'Trabajo SAP',
-        icon: 'assignment',
-        capability: 'Transacción y usuario seudonimizado desde un fichero JSONL autorizado.',
-        onByDefault: false,
-      },
-    ],
+    id: 'tgz',
+    os: 'linux',
+    title: 'Cualquier Linux',
+    hint: 'Archivo .tar.gz · x86_64',
+    install: (version) =>
+      `tar -xzf ekumetrics-agent-${version}-linux-amd64.tar.gz\ncd ekumetrics-agent-${version}-linux-amd64\nsudo ./install.sh`,
+    verify: 'sudo systemctl status ekumetrics-agent\ncurl -s http://127.0.0.1:9090/healthz',
+    match: (name) => name.endsWith('.tar.gz'),
   },
   {
-    id: 'apps',
-    label: 'Aplicaciones',
-    modules: [
-      {
-        key: 'metrics.scrape',
-        name: 'Scrape',
-        icon: 'query_stats',
-        capability: 'Recolecta /metrics Prometheus de los jobs declarados.',
-        onByDefault: false,
-      },
-      {
-        key: 'metrics.otlp',
-        name: 'Métricas OTLP',
-        icon: 'input',
-        capability: 'Recibe métricas de aplicaciones en :4317 / :4318.',
-        onByDefault: false,
-      },
-      {
-        key: 'traces',
-        name: 'Trazas',
-        icon: 'timeline',
-        capability: 'Trazas OTLP de aplicaciones instrumentadas.',
-        onByDefault: false,
-      },
-    ],
+    id: 'bin',
+    os: 'linux',
+    title: 'Binario',
+    hint: 'ekumetrics-agent-linux-amd64',
+    install: () =>
+      `chmod +x ekumetrics-agent-linux-amd64\nsudo ./ekumetrics-agent-linux-amd64 --config /etc/ekumetrics-agent/agent.yaml`,
+    verify: 'curl -s http://127.0.0.1:9090/healthz',
+    match: (name) => name === 'ekumetrics-agent-linux-amd64',
   },
   {
-    id: 'ingest',
-    label: 'Ingesta de red',
-    modules: [
-      {
-        key: 'ingest.syslog',
-        name: 'Syslog',
-        icon: 'cell_tower',
-        capability: 'Escucha syslog UDP/TCP de equipos de la sede.',
-        onByDefault: false,
-      },
-      {
-        key: 'ingest.netflow',
-        name: 'NetFlow',
-        icon: 'swap_horiz',
-        capability: 'NetFlow v5 (metadatos). v9/IPFIX se cuentan, no se decodifican.',
-        onByDefault: false,
-      },
-      {
-        key: 'ingest.traps',
-        name: 'Traps SNMP',
-        icon: 'notification_important',
-        capability: 'Recibe traps. coldStart es info; linkDown es warning.',
-        onByDefault: false,
-      },
-    ],
+    id: 'msi',
+    os: 'windows',
+    title: 'Windows Server (MSI)',
+    hint: 'Instalador .msi · amd64',
+    install: (version) => `msiexec /i ekumetrics-agent-${version}-windows-amd64.msi`,
+    verify:
+      'Get-Service ekumetrics-agent\nInvoke-WebRequest http://127.0.0.1:9090/healthz',
+    match: (name) => name.endsWith('.msi'),
   },
   {
-    id: 'inventory',
-    label: 'Inventario y sondas',
-    modules: [
-      {
-        key: 'discovery.passive',
-        name: 'Discovery pasivo',
-        icon: 'radar',
-        capability: 'ARP, LLDP, CDP y ENTITY. Inventario sugerido persistente.',
-        onByDefault: false,
-      },
-      {
-        key: 'modules.discovery.active',
-        name: 'Discovery activo',
-        icon: 'travel_explore',
-        capability: 'Requiere authorized: true. En 1.4 no barre la red.',
-        onByDefault: false,
-      },
-      {
-        key: 'probes',
-        name: 'Sondas',
-        icon: 'speed',
-        capability: 'ICMP o TCP: latencia, pérdida y si el destino responde.',
-        onByDefault: false,
-      },
-    ],
+    id: 'zip',
+    os: 'windows',
+    title: 'Windows (zip)',
+    hint: 'zip + install.ps1 · amd64',
+    install: (version) =>
+      `Expand-Archive .\\ekumetrics-agent-${version}-windows-amd64.zip\n.\\install.ps1`,
+    verify:
+      'Get-Service ekumetrics-agent\nInvoke-WebRequest http://127.0.0.1:9090/healthz',
+    match: (name) => name.includes('windows') && name.endsWith('.zip'),
   },
 ];
 
 @Component({
   selector: 'app-agent-page',
-  imports: [MatIcon, EkuPageHeaderComponent, EkuErrorStateComponent],
+  imports: [MatIcon, ReactiveFormsModule, EkuPageHeaderComponent, EkuErrorStateComponent],
   templateUrl: './agent-page.html',
   styleUrl: './agent-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AgentPage {
   private readonly http = inject(HttpClient);
-  private readonly tenants = inject(TenantService);
+  private readonly fb = inject(FormBuilder);
 
   protected readonly releasesUrl = RELEASES_PAGE;
-  protected readonly liveOn = signal<Record<string, boolean>>({});
-  protected readonly groups = computed(() =>
-    MODULE_GROUPS.map((group) => ({
-      ...group,
-      modules: group.modules.map((item) => ({
-        ...item,
-        on: this.moduleOn(item),
-      })),
-    })),
-  );
-  protected readonly release = signal<GithubRelease | null>(null);
+  protected readonly releases = signal<GithubRelease[]>([this.fallbackRelease()]);
   protected readonly error = signal<string | null>(null);
-  protected readonly catalogVersion = computed(() =>
-    versionFromTag(this.release()?.tag_name ?? FALLBACK_VERSION),
+  protected readonly picker = this.fb.nonNullable.group({
+    version: [FALLBACK_VERSION, Validators.required],
+    os: ['linux' as OsId, Validators.required],
+    distro: ['deb' as DistroId, Validators.required],
+  });
+  private readonly pickerValue = toSignal(
+    this.picker.valueChanges.pipe(startWith(this.picker.getRawValue())),
+    { initialValue: this.picker.getRawValue() },
+  );
+  protected readonly versions = computed(() =>
+    this.releases().map((item) => versionFromTag(item.tag_name)),
+  );
+  protected readonly distros = computed(() =>
+    DISTROS.filter((item) => item.os === this.pickerValue().os),
   );
   protected readonly releaseLabel = computed(
-    () =>
-      `Ekumetrics Agent ${this.catalogVersion()} · linux/amd64`,
+    () => `Ekumetrics Agent ${this.versions()[0] ?? FALLBACK_VERSION} · linux/amd64 · windows/amd64`,
   );
-
-  protected readonly cards = computed<InstallerCard[]>(() => {
-    const version = this.catalogVersion();
-    const assets = this.mergeAssets(version, this.release()?.assets ?? []);
-    return [
-      {
-        id: 'deb',
-        title: 'Debian / Ubuntu',
-        os: 'Linux',
-        hint: `.deb · amd64 · v${version}`,
-        icon: 'terminal',
-        badge: 'DEB',
-        command: `sudo apt-get install -y ./ekumetrics-agent_${version}-1_amd64.deb`,
-        asset: assets.find((item) => item.name.endsWith('.deb')) ?? null,
-      },
-      {
-        id: 'rpm',
-        title: 'Rocky / RHEL',
-        os: 'Linux',
-        hint: `.rpm · x86_64 · v${version}`,
-        icon: 'dns',
-        badge: 'RPM',
-        command: `sudo dnf install -y ./ekumetrics-agent-${version}-1.x86_64.rpm`,
-        asset: assets.find((item) => item.name.endsWith('.rpm')) ?? null,
-      },
-      {
-        id: 'tgz',
-        title: 'Linux genérico',
-        os: 'Linux',
-        hint: `.tar.gz · x86_64 · v${version}`,
-        icon: 'folder_zip',
-        badge: 'TGZ',
-        command: `tar -xzf ekumetrics-agent-${version}-linux-amd64.tar.gz && sudo ./install.sh`,
-        asset: assets.find((item) => item.name.endsWith('.tar.gz')) ?? null,
-      },
-    ];
+  protected readonly selected = computed(() => {
+    const picked = this.pickerValue();
+    const version = picked.version ?? FALLBACK_VERSION;
+    const distro = picked.distro ?? 'deb';
+    const option = DISTROS.find((item) => item.id === distro) ?? DISTROS[0];
+    const release =
+      this.releases().find((item) => versionFromTag(item.tag_name) === version) ??
+      this.releases()[0];
+    const assets = this.mergeAssets(version, release?.assets ?? []);
+    return {
+      ...option,
+      version,
+      install: option.install(version),
+      asset: pickAsset(assets, option.match),
+    };
   });
 
   constructor() {
-    this.http.get<GithubRelease>(RELEASES_API).subscribe({
-      next: (value) => {
-        if (value.draft || value.prerelease || !versionFromTag(value.tag_name || '')) {
-          this.release.set(this.fallbackRelease());
-          return;
-        }
-        this.release.set(value);
+    this.picker.controls.os.valueChanges.subscribe((os) => {
+      const first = DISTROS.find((item) => item.os === os);
+      if (first && !DISTROS.some((item) => item.id === this.picker.controls.distro.value && item.os === os)) {
+        this.picker.controls.distro.setValue(first.id);
+      }
+    });
+    this.http.get<GithubRelease[]>(RELEASES_API).subscribe({
+      next: (items) => {
+        const published = items.filter(
+          (item) => !item.draft && !item.prerelease && versionFromTag(item.tag_name || ''),
+        );
+        this.releases.set(published.length ? published : [this.fallbackRelease()]);
+        this.picker.controls.version.setValue(this.versions()[0] ?? FALLBACK_VERSION);
         this.error.set(null);
       },
       error: () => {
-        this.release.set(this.fallbackRelease());
+        this.releases.set([this.fallbackRelease()]);
       },
     });
-    this.loadLiveModules();
-  }
-
-  private loadLiveModules(): void {
-    const query = new URLSearchParams();
-    const tenantId = this.tenants.slug();
-    if (tenantId) {
-      query.set('tenant_id', tenantId);
-    }
-    query.set('range', '1h');
-    this.http
-      .get<{ agent?: { modules?: Array<{ module: string; enabled: boolean }> } }>(
-        `${API_BASE_URL}/v1/dashboard?${query.toString()}`,
-      )
-      .subscribe({
-        next: (board) => {
-          const live: Record<string, boolean> = {};
-          for (const item of board.agent?.modules ?? []) {
-            if (item.module) {
-              live[item.module] = item.enabled;
-            }
-          }
-          this.liveOn.set(live);
-        },
-      });
-  }
-
-  private moduleOn(item: AgentModule): boolean {
-    const live = this.liveOn();
-    if (Object.keys(live).length === 0) {
-      return item.onByDefault;
-    }
-    return live[item.key] === true || live[this.reportedKey(item.key)] === true;
-  }
-
-  /** El YAML de 1.4 usa snmp.devices; la serie sigue siendo metrics.snmp. */
-  private reportedKey(key: string): string {
-    return key === 'snmp.devices' ? 'metrics.snmp' : key;
   }
 
   protected formatSize(bytes: number): string {
     if (!bytes) {
-      return this.catalogVersion();
+      return this.selected().version;
     }
     return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
   }
@@ -390,7 +220,9 @@ export class AgentPage {
   private mergeAssets(version: string, remote: GithubAsset[]): GithubAsset[] {
     return catalogAssets(version).map((fallback) => {
       const found = remote.find((item) => item.name === fallback.name);
-      return found ?? fallback;
+      return found
+        ? { ...found, browser_download_url: fallback.browser_download_url }
+        : fallback;
     });
   }
 }

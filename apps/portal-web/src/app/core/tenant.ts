@@ -53,15 +53,22 @@ export class TenantService {
     this.http.get<TenantOption[]>(`${API_BASE_URL}/v1/tenants`).subscribe({
       next: (items) => {
         this.tenants.set(items);
-        if (!items.some((item) => item.slug === this.slug())) {
-          this.select(items[0]?.slug || this.auth.tenant());
+        const stored = this.slug() || this.readSlug();
+        if (stored && items.some((item) => item.slug === stored)) {
+          if (stored !== this.slug()) {
+            this.select(stored);
+          }
+          return;
+        }
+        if (!stored) {
+          this.select(this.auth.tenant() || items[0]?.slug || 'default');
         }
       },
     });
   }
 
   select(slug: string): void {
-    const next = slug.trim() || this.auth.tenant() || 'default';
+    const next = slug.trim() || this.auth.tenant() || this.readSlug() || 'default';
     this.slug.set(next);
     if (this.auth.isOperator()) {
       localStorage.setItem(STORAGE_KEY, next);

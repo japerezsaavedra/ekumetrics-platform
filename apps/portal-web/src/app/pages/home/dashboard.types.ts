@@ -105,6 +105,14 @@ export type DashboardResponse = {
   sap?: DashboardDatabase[];
   agents: Array<{ agentId: string; tenantId: string | null; siteId: string | null }>;
   agentId: string | null;
+  thresholds?: {
+    cpuWarn: number;
+    cpuCrit: number;
+    memWarn: number;
+    memCrit: number;
+    diskWarn: number;
+    diskCrit: number;
+  };
   refreshedAt: number;
   host: {
     id: string | null;

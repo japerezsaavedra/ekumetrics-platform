@@ -1,0 +1,38 @@
+discovery.docker "platform" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "platform" {
+  targets = discovery.docker.platform.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/ekumetrics-.+"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["container"]
+    target_label  = "service_name"
+  }
+}
+
+loki.source.docker "platform" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.relabel.platform.output
+  labels        = { job = "platform-host" }
+  relabel_rules = discovery.relabel.platform.rules
+  forward_to    = [loki.write.loki.receiver]
+}
+
+loki.write "loki" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

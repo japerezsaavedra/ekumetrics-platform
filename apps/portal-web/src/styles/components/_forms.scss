@@ -96,12 +96,17 @@
 }
 
 .eku-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   min-height: 2.5rem;
   padding: 0 0.75rem;
   border: 1px solid var(--eku-primary);
   background: var(--eku-surface);
   color: var(--eku-text-primary);
   font: inherit;
+  text-decoration: none;
   cursor: pointer;
 }
 

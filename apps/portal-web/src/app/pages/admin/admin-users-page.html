@@ -62,9 +62,27 @@
 
   @if (created(); as account) {
     <article class="admin-users__secret">
-      <p>Usuario creado en Keycloak. Entregue esta clave; no se vuelve a mostrar.</p>
-      <p><strong>{{ account.email }}</strong></p>
-      <p class="admin-users__password">{{ account.temporaryPassword }}</p>
+      <p>
+        {{ account.reset ? 'Clave restablecida.' : 'Usuario creado en Keycloak.' }}
+        Entregue esta clave; no se vuelve a mostrar.
+      </p>
+      <p>
+        <strong>{{ account.email }}</strong>
+      </p>
+      <span class="admin-users__secret-row">
+        <p class="admin-users__password">
+          {{ passwordVisible() ? account.temporaryPassword : '••••••••••••••••••••' }}
+        </p>
+        <button
+          type="button"
+          class="eku-icon-btn"
+          (click)="passwordVisible.set(!passwordVisible())"
+          [attr.aria-label]="passwordVisible() ? 'Ocultar clave' : 'Mostrar clave'"
+          [matTooltip]="passwordVisible() ? 'Ocultar' : 'Mostrar'"
+        >
+          <mat-icon>{{ passwordVisible() ? 'visibility_off' : 'visibility' }}</mat-icon>
+        </button>
+      </span>
     </article>
   }
 
@@ -88,10 +106,31 @@
         <span>{{ item.tenant.name }} · {{ item.tenant.slug }}</span>
         <span>{{ item.role }}</span>
         <span class="eku-grid-table__actions">
-          <button type="button" class="eku-icon-btn" matTooltip="Editar" (click)="edit(item)" aria-label="Editar usuario">
+          <button
+            type="button"
+            class="eku-icon-btn"
+            matTooltip="Restablecer clave"
+            (click)="resetPassword(item)"
+            aria-label="Restablecer clave"
+          >
+            <mat-icon>lock_reset</mat-icon>
+          </button>
+          <button
+            type="button"
+            class="eku-icon-btn"
+            matTooltip="Editar"
+            (click)="edit(item)"
+            aria-label="Editar usuario"
+          >
             <mat-icon>edit</mat-icon>
           </button>
-          <button type="button" class="eku-icon-btn eku-icon-btn--danger" matTooltip="Eliminar" (click)="remove(item)" aria-label="Eliminar usuario">
+          <button
+            type="button"
+            class="eku-icon-btn eku-icon-btn--danger"
+            matTooltip="Eliminar"
+            (click)="remove(item)"
+            aria-label="Eliminar usuario"
+          >
             <mat-icon>delete</mat-icon>
           </button>
         </span>

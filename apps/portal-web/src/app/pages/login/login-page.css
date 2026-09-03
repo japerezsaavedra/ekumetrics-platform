@@ -84,6 +84,23 @@
   color: var(--eku-text-secondary);
 }
 
+.login__form {
+  grid-template-columns: 1fr;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.login__form > button[type='submit'].login__submit {
+  grid-column: 1;
+  justify-self: stretch;
+  width: 100%;
+  border: 0;
+  background: var(--eku-primary);
+  color: var(--eku-on-primary);
+}
+
 .login__card eku-error-state {
   display: block;
 }
@@ -93,30 +110,21 @@
   margin: 0;
 }
 
-.login form {
-  display: grid;
-  gap: var(--eku-space-3);
-  margin: 0;
+.login__form > button[type='button'].login__submit {
+  grid-column: 1;
+  justify-self: stretch;
+  width: 100%;
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface);
+  color: var(--eku-text-primary);
 }
 
-.login .eku-form {
-  grid-template-columns: 1fr;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.login .eku-field {
-  grid-template-rows: 1.25rem 2.5rem auto;
-}
-
-.login button[type='submit']:disabled {
+.login__submit:disabled {
   opacity: 0.6;
   cursor: wait;
 }
 
-.login button[type='submit'] {
+.login__submit {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -132,10 +140,15 @@
   cursor: pointer;
 }
 
-.login button[type='submit'] .mat-icon {
+.login__submit .mat-icon {
   font-size: 1.25rem;
   width: 1.25rem;
   height: 1.25rem;
+}
+
+.login__security {
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 @media (max-width: 47.99rem) {

@@ -29,6 +29,10 @@
   grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 0.8fr) auto;
 }
 
+.eku-grid-table__row--5 {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.2fr) minmax(0, 1.4fr) minmax(0, 1fr) auto;
+}
+
 .eku-grid-table__actions {
   display: inline-flex;
   justify-content: flex-end;
@@ -89,7 +93,8 @@
 
 @media (max-width: 47.99rem) {
   .eku-grid-table__row--3,
-  .eku-grid-table__row--4 {
+  .eku-grid-table__row--4,
+  .eku-grid-table__row--5 {
     grid-template-columns: 1fr;
     padding: var(--eku-space-3) var(--eku-space-4);
   }

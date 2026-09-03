@@ -4,7 +4,9 @@
       type="button"
       class="eku-chart__zoom"
       [class.is-on]="zoomOn()"
-      [attr.title]="zoomOn() ? 'Desactivar zoom para desplazarte por la pagina' : 'Activar zoom con la rueda'"
+      [attr.title]="
+        zoomOn() ? 'Desactivar zoom para desplazarte por la pagina' : 'Activar zoom con la rueda'
+      "
       (click)="toggleZoom()"
     >
       {{ zoomOn() ? 'Zoom activo' : 'Zoom' }}

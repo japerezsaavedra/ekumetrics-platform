@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "documents": [
+    {
+      "sourceKey": "runbooks/postgresql-capacity",
+      "title": "Capacidad de PostgreSQL",
+      "sections": [
+        { "heading": "Conexiones agotadas", "content": "Si PostgreSQL alcanza max_connections, revise sesiones activas e idle, el pool de conexiones y consultas bloqueadas antes de aumentar el límite." },
+        { "heading": "Disco lleno", "content": "Ante poco espacio en disco, detenga escrituras no esenciales, confirme WAL y tablas temporales, amplíe capacidad y ejecute una restauración de prueba si hubo errores de escritura." }
+      ]
+    },
+    {
+      "sourceKey": "runbooks/agent-silence",
+      "title": "Agente sin telemetría",
+      "sections": [
+        { "heading": "Diagnóstico", "content": "Cuando un agente deja de enviar telemetría, compruebe lastSeenAt, conectividad mTLS, reloj del host, certificados y errores del Collector antes de reinstalar." },
+        { "heading": "Recuperación", "content": "Después de recuperar el agente confirme una métrica, un log y una traza recientes con el mismo tenant, sitio y agent_id." }
+      ]
+    },
+    {
+      "sourceKey": "runbooks/high-cpu",
+      "title": "CPU elevada",
+      "sections": [
+        { "heading": "Correlación", "content": "Para CPU elevada compare promedio y máximo, identifique el proceso consumidor y correlacione la hora del pico con logs de error y trazas lentas." },
+        { "heading": "Mitigación", "content": "No reinicie automáticamente. Limite el proceso solo si existe impacto confirmado y conserve evidencia anterior y posterior a la mitigación." }
+      ]
+    },
+    {
+      "sourceKey": "runbooks/queue-backlog",
+      "title": "Acumulación en colas",
+      "sections": [
+        { "heading": "Backlog", "content": "Si crece el backlog de Kafka, RabbitMQ o NATS, compare tasa de publicación y consumo, consumidores activos, lag, errores y capacidad de disco." }
+      ]
+    },
+    {
+      "sourceKey": "postmortems/tempo-latency",
+      "title": "Latencia en servicios trazados",
+      "sections": [
+        { "heading": "Hallazgo", "content": "Una latencia alta se atribuye usando trace_id y spans lentos. Correlacione servicio, operación, duración, estado de error y logs con el mismo trace_id." }
+      ]
+    }
+  ],
+  "questions": [
+    { "question": "¿Qué reviso si PostgreSQL agotó todas sus conexiones?", "expectedSourceKey": "runbooks/postgresql-capacity", "expectedSection": "Conexiones agotadas" },
+    { "question": "La base de datos se quedó sin espacio, ¿cómo actuamos?", "expectedSourceKey": "runbooks/postgresql-capacity", "expectedSection": "Disco lleno" },
+    { "question": "Un agente dejó de mandar métricas y logs, ¿qué diagnostico primero?", "expectedSourceKey": "runbooks/agent-silence", "expectedSection": "Diagnóstico" },
+    { "question": "¿Cómo valido que un agente volvió a operar correctamente?", "expectedSourceKey": "runbooks/agent-silence", "expectedSection": "Recuperación" },
+    { "question": "Tenemos un pico de CPU, ¿cómo encuentro la causa?", "expectedSourceKey": "runbooks/high-cpu", "expectedSection": "Correlación" },
+    { "question": "¿Debo reiniciar inmediatamente el proceso con CPU alta?", "expectedSourceKey": "runbooks/high-cpu", "expectedSection": "Mitigación" },
+    { "question": "Está aumentando el lag de Kafka y los mensajes pendientes", "expectedSourceKey": "runbooks/queue-backlog", "expectedSection": "Backlog" },
+    { "question": "¿Cómo relaciono una petición lenta con sus registros?", "expectedSourceKey": "postmortems/tempo-latency", "expectedSection": "Hallazgo" }
+  ]
+}

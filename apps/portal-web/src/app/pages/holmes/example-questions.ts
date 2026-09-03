@@ -3,4 +3,5 @@ export const EXAMPLE_QUESTIONS = [
   'Hay anomalías de CPU o memoria?',
   'Algún agente dejó de reportar?',
   'Qué módulos tiene activos el agente?',
+  'Qué trazas explican la latencia del agente?',
 ];

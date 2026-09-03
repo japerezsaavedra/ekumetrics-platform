@@ -1,0 +1,215 @@
+.board-editor {
+  width: 100%;
+}
+
+.board-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--eku-space-2);
+}
+
+.board-actions a,
+.board-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 7.5rem;
+  min-height: 2.5rem;
+  text-decoration: none;
+}
+
+.board-editor__form,
+.board-editor__view {
+  display: grid;
+  gap: var(--eku-space-4);
+  padding-top: var(--eku-space-4);
+}
+
+.board-editor__meta {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) 14rem minmax(12rem, 1fr);
+  gap: var(--eku-space-3);
+}
+
+@media (max-width: 47.99rem) {
+  .board-editor__meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+.board-editor__view h2,
+.board-editor__catalog h2,
+.board-editor__props h2 {
+  margin: 0 0 var(--eku-space-3);
+  font-size: 1rem;
+}
+
+.board-editor__layout {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr) 16rem;
+  gap: var(--eku-space-4);
+  align-items: start;
+}
+
+.board-editor__catalog,
+.board-editor__props,
+.board-editor__canvas {
+  min-height: 20rem;
+  padding: var(--eku-space-4);
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface);
+}
+
+.board-editor__catalog,
+.board-editor__props {
+  display: grid;
+  align-content: start;
+  gap: var(--eku-space-2);
+}
+
+.board-editor__catalog p,
+.board-editor__props p,
+.board-editor__hint {
+  margin: 0;
+  color: var(--eku-text-secondary);
+  font-size: 0.85rem;
+}
+
+.board-editor__catalog button {
+  display: grid;
+  gap: 0.15rem;
+  min-height: 3.25rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface-container);
+  color: inherit;
+  text-align: left;
+  cursor: grab;
+}
+
+.board-editor__catalog small,
+.board-editor__card small,
+.board-editor__card p {
+  color: var(--eku-text-secondary);
+  font-size: 0.75rem;
+}
+
+.board-editor__canvas {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--eku-space-3);
+  align-content: start;
+}
+
+.board-editor__hint {
+  grid-column: 1 / -1;
+}
+
+.board-editor__card,
+.board-editor__placeholder {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--eku-space-2);
+  grid-column: span var(--w, 4);
+  min-height: calc(var(--h, 1) * 8rem);
+  padding: var(--eku-space-3);
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface-container);
+}
+
+.board-editor__card {
+  cursor: pointer;
+}
+
+.board-editor__card.is-selected {
+  outline: 2px solid var(--eku-primary);
+  outline-offset: -2px;
+}
+
+.board-editor__card header {
+  display: flex;
+  align-items: center;
+  gap: var(--eku-space-2);
+  font-weight: 650;
+}
+
+.board-editor__card header span {
+  flex: 1;
+}
+
+.board-editor__card strong {
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.board-editor__card.is-ok strong {
+  color: var(--eku-healthy);
+}
+
+.board-editor__card.is-crit strong {
+  color: var(--eku-critical);
+}
+
+.board-editor__card eku-chart {
+  display: block;
+  height: 8rem;
+}
+
+.board-editor__handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--eku-text-secondary);
+  cursor: grab;
+}
+
+.board-editor__placeholder {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--eku-primary) 10%, transparent);
+}
+
+.board-editor__placeholder--catalog {
+  grid-column: auto;
+  min-height: 3.25rem;
+  padding: 0;
+}
+
+.board-editor__ghost {
+  min-width: 8rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--eku-primary);
+  background: var(--eku-surface);
+  font-weight: 650;
+}
+
+.board-editor__size {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--eku-space-2);
+}
+
+.board-editor__props .eku-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 7.5rem;
+  min-height: 2.5rem;
+}
+
+@media (max-width: 70rem) {
+  .board-editor__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .board-actions {
+    flex-wrap: wrap;
+  }
+}

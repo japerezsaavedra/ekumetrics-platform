@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "currentRelease": "1.0.0",
+  "releases": {
+    "1.0.0": {
+      "portal": "1.0.0",
+      "api": "1.0.0",
+      "databaseMigration": "20260902100000_aiops_graph_incidents",
+      "agent": ">=1.4.0 <2.0.0",
+      "keycloak": "26.7.2",
+      "postgres": "18",
+      "schemaBackwardCompatible": true,
+      "upgradeFrom": [],
+      "rollbackTo": null
+    }
+  },
+  "policy": {
+    "supportedProductLines": 1,
+    "migrationStrategy": "expand-contract",
+    "rollbackRequiresRetainedImages": true,
+    "databaseRestoreRequiresExplicitAuthorization": true
+  }
+}

@@ -247,7 +247,10 @@ export class EkuChartComponent {
         return;
       }
       last = now;
-      const point = this.chart?.convertFromPixel({ seriesIndex: 0 }, [event.offsetX, event.offsetY]);
+      const point = this.chart?.convertFromPixel({ seriesIndex: 0 }, [
+        event.offsetX,
+        event.offsetY,
+      ]);
       const ts = Array.isArray(point) ? Number(point[0]) : NaN;
       if (Number.isFinite(ts)) {
         this.timePicked.emit(ts);

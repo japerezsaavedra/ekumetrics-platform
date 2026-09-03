@@ -1,5 +1,12 @@
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatIcon } from '@angular/material/icon';
@@ -184,7 +191,9 @@ export class HomePage {
   protected readonly hostSwitching = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly kioskOn = this.kiosk.active;
-  protected readonly section = computed(() => this.sectionFrom(this.path() || this.router.url || '/'));
+  protected readonly section = computed(() =>
+    this.sectionFrom(this.path() || this.router.url || '/'),
+  );
   protected readonly pageTitle = computed(() => {
     const routeId = this.entityIdFrom(this.path() || this.router.url || '');
     if (this.section() === 'host') {
@@ -241,6 +250,14 @@ export class HomePage {
   protected readonly formatSize = formatSize;
   protected readonly tonePercent = tonePercent;
   protected readonly toneLabel = toneLabel;
+  protected readonly thresholds = computed(() => ({
+    cpuWarn: this.data()?.thresholds?.cpuWarn ?? 0.7,
+    cpuCrit: this.data()?.thresholds?.cpuCrit ?? 0.9,
+    memWarn: this.data()?.thresholds?.memWarn ?? 0.8,
+    memCrit: this.data()?.thresholds?.memCrit ?? 0.9,
+    diskWarn: this.data()?.thresholds?.diskWarn ?? 0.7,
+    diskCrit: this.data()?.thresholds?.diskCrit ?? 0.85,
+  }));
   protected readonly barWidth = barWidth;
   protected readonly sparkPoints = sparkPoints;
   protected readonly sparkArea = sparkArea;
@@ -496,12 +513,16 @@ export class HomePage {
     const items = this.data()?.agent.modules ?? [];
     return [...items]
       .map((item) => ({ ...item, label: moduleLabel(item.module) }))
-      .sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.label.localeCompare(b.label, 'es'));
+      .sort(
+        (a, b) => Number(b.enabled) - Number(a.enabled) || a.label.localeCompare(b.label, 'es'),
+      );
   });
 
   protected readonly cpuTrend = computed(() => seriesTrend(this.data()?.host.series.cpu ?? []));
 
-  protected readonly cpuStates = computed(() => cpuBreakdown(this.data()?.host.series.cpuByState ?? []));
+  protected readonly cpuStates = computed(() =>
+    cpuBreakdown(this.data()?.host.series.cpuByState ?? []),
+  );
 
   protected readonly cpuIdle = computed(() => {
     const used = this.data()?.host.cpuUsed;
@@ -532,7 +553,13 @@ export class HomePage {
       return namedArea(states, 'percent', true);
     }
     return areaOption(
-      [{ name: 'CPU', points: this.data()?.host.series.cpu ?? [], color: token('--eku-chart-series') }],
+      [
+        {
+          name: 'CPU',
+          points: this.data()?.host.series.cpu ?? [],
+          color: token('--eku-chart-series'),
+        },
+      ],
       'percent',
     );
   });
@@ -599,12 +626,20 @@ export class HomePage {
 
   protected readonly tcpConnChart = computed(() => {
     this.theme.mode();
-    return namedArea(connectionsByProtocol(this.data()?.host.series.networkConn ?? [], 'tcp'), 'number', false);
+    return namedArea(
+      connectionsByProtocol(this.data()?.host.series.networkConn ?? [], 'tcp'),
+      'number',
+      false,
+    );
   });
 
   protected readonly otherConnChart = computed(() => {
     this.theme.mode();
-    return namedArea(connectionsByProtocol(this.data()?.host.series.networkConn ?? [], 'other'), 'number', false);
+    return namedArea(
+      connectionsByProtocol(this.data()?.host.series.networkConn ?? [], 'other'),
+      'number',
+      false,
+    );
   });
 
   protected readonly logVolume = computed(() => volumeFromLines(this.data()?.logs.lines ?? []));
@@ -625,7 +660,9 @@ export class HomePage {
     });
 
     effect(() => {
-      const tab = new URLSearchParams((this.path() || this.router.url).split('?')[1] ?? '').get('tab');
+      const tab = new URLSearchParams((this.path() || this.router.url).split('?')[1] ?? '').get(
+        'tab',
+      );
       const index = HOST_TABS.indexOf((tab as (typeof HOST_TABS)[number]) ?? 'resumen');
       this.hostTabIndex.set(index >= 0 ? index : 0);
     });
@@ -662,13 +699,21 @@ export class HomePage {
           persistTime(range, refresh);
           const section = this.sectionFrom(url);
           const routeId = this.entityIdFrom(url);
-          if ((section === 'host' || section === 'agent') && agentId && routeId && agentId !== routeId) {
+          if (
+            (section === 'host' || section === 'agent') &&
+            agentId &&
+            routeId &&
+            agentId !== routeId
+          ) {
             void this.router.navigate([section === 'agent' ? '/agentes' : '/hosts', agentId], {
               replaceUrl: true,
             });
           }
           const hostId =
-            routeId || (section === 'host' || section === 'agent' || section === 'icewarp-host' ? agentId : '');
+            routeId ||
+            (section === 'host' || section === 'agent' || section === 'icewarp-host'
+              ? agentId
+              : '');
           const shown =
             section === 'icewarp-host'
               ? (this.data()?.icewarpBoard?.hostId ?? '')
@@ -850,7 +895,7 @@ export class HomePage {
   }
 
   private entityIdFrom(url: string): string | null {
-    const path = url.split('?')[0];
+    const path = url.split('?')[0].replace(/^\/kiosk/, '');
     const host = path.match(/^\/hosts\/([^/]+)$/);
     if (host?.[1]) {
       return decodeURIComponent(host[1]);
@@ -911,25 +956,27 @@ export class HomePage {
       query.set('tenant_id', tenantId);
     }
     query.set('range', range);
-    return this.http.get<DashboardResponse>(`${API_BASE_URL}/v1/dashboard?${query.toString()}`).pipe(
-      tap((value) => {
-        this.data.set(value);
-        this.error.set(null);
-        const selectedHost = value.host.id ?? value.agentId;
-        if (selectedHost && selectedHost !== this.agentControl.value) {
-          this.agentControl.setValue(selectedHost, { emitEvent: false });
-        }
-        if (this.hostSwitching()) {
-          requestAnimationFrame(() => this.hostSwitching.set(false));
-        }
-      }),
-      catchError(() => {
-        this.hostSwitching.set(false);
-        if (!this.data()) {
-          this.error.set('No se pudieron leer las series. Compruebe Prometheus y la API.');
-        }
-        return EMPTY;
-      }),
-    );
+    return this.http
+      .get<DashboardResponse>(`${API_BASE_URL}/v1/dashboard?${query.toString()}`)
+      .pipe(
+        tap((value) => {
+          this.data.set(value);
+          this.error.set(null);
+          const selectedHost = value.host.id ?? value.agentId;
+          if (selectedHost && selectedHost !== this.agentControl.value) {
+            this.agentControl.setValue(selectedHost, { emitEvent: false });
+          }
+          if (this.hostSwitching()) {
+            requestAnimationFrame(() => this.hostSwitching.set(false));
+          }
+        }),
+        catchError(() => {
+          this.hostSwitching.set(false);
+          if (!this.data()) {
+            this.error.set('No se pudieron leer las series. Compruebe Prometheus y la API.');
+          }
+          return EMPTY;
+        }),
+      );
   }
 }

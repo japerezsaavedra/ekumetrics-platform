@@ -13,6 +13,37 @@
   margin-top: var(--eku-space-5);
 }
 
+.admin-sites__section-title {
+  margin: 2rem 0 0.25rem;
+  font-size: 1.1rem;
+}
+.admin-sites__section-copy {
+  margin: 0 0 0.75rem;
+  color: var(--eku-text-muted);
+}
+.admin-sites__credential {
+  align-items: flex-start;
+}
+.admin-sites__credential div {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.admin-sites__credential code {
+  overflow-wrap: anywhere;
+}
+
+.admin-sites__secret {
+  display: flex;
+  align-items: center;
+  gap: var(--eku-space-2);
+  min-width: 0;
+}
+
+.admin-sites__secret code {
+  flex: 1;
+}
+
 .admin-sites .eku-form {
   margin-bottom: var(--eku-space-5);
 }
