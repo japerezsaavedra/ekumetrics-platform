@@ -67,7 +67,7 @@ spec:
             - name: PORT
               value: "3000"
             - name: DEPLOYMENT_MODE
-              value: lab
+              value: production
             - name: PRODUCT_VERSION
               value: "1.0.0"
             - name: DATABASE_URL
@@ -76,13 +76,13 @@ spec:
                   name: ekumetrics-secrets
                   key: database_url
             - name: CORS_ORIGIN
-              value: http://portal.gd.lan
+              value: https://portal.ekumetrics.com
             - name: PORTAL_PUBLIC_URL
-              value: http://portal.gd.lan
+              value: https://portal.ekumetrics.com
             - name: API_PUBLIC_URL
-              value: http://api.gd.lan
+              value: https://api.ekumetrics.com
             - name: KEYCLOAK_URL
-              value: http://auth.gd.lan
+              value: https://auth.ekumetrics.com
             - name: KEYCLOAK_INTERNAL_URL
               value: http://keycloak:8080
             - name: KEYCLOAK_REALM
@@ -113,6 +113,11 @@ spec:
                 secretKeyRef:
                   name: ekumetrics-secrets
                   key: ingest_shared_key
+            - name: AGENT_EDGE_ASSERTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ekumetrics-secrets
+                  key: agent_edge_assertion_key
             - name: KIOSK_TOKEN_SECRET
               valueFrom:
                 secretKeyRef:
@@ -128,6 +133,21 @@ spec:
                 secretKeyRef:
                   name: ekumetrics-secrets
                   key: ai_settings_encryption_key
+            - name: HOLMES_URL
+              value: http://holmes:5050
+            - name: HOLMES_UPSTREAM_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ekumetrics-secrets
+                  key: holmes_upstream_key
+            - name: AI_DEFAULT_PROVIDER
+              value: ollama
+            - name: OLLAMA_URL
+              value: http://ollama:11434/v1
+            - name: AI_EMBEDDING_URL
+              value: http://ollama:11434
+            - name: AI_EMBEDDING_MODEL
+              value: qwen3-embedding:0.6b
             - name: EVENT_RETENTION_DAYS
               value: "30"
             - name: EVENT_RETENTION_INTERVAL_MS

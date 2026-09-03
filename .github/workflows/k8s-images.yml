@@ -66,6 +66,18 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build and push keycloak
+        uses: docker/build-push-action@v5
+        with:
+          context: infrastructure/docker/keycloak
+          file: infrastructure/docker/keycloak/Containerfile
+          push: true
+          tags: |
+            ghcr.io/japerezsaavedra/ekumetrics-keycloak:26.7.2
+            ghcr.io/japerezsaavedra/ekumetrics-keycloak:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   deploy:
     name: Deploy to gd-k8s (manual)
     runs-on: gd-k8s

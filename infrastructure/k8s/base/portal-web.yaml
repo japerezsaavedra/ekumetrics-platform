@@ -55,9 +55,9 @@ spec:
           imagePullPolicy: Always
           env:
             - name: PORTAL_API_URL
-              value: http://api.gd.lan
+              value: https://api.ekumetrics.com
             - name: PORTAL_GRAFANA_URL
-              value: http://grafana.eku.gd.lan
+              value: https://grafana.ekumetrics.com
           ports:
             - name: http
               containerPort: 8080

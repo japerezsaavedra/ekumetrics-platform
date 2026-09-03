@@ -39,21 +39,22 @@ spec:
                   - key: node-role.kubernetes.io/control-plane
                     operator: DoesNotExist
       initContainers:
-        - name: wait-for-postgres
+        - name: wait-for-keycloak-db
           image: busybox:1.36
           command:
             - sh
             - -c
             - |
-              until nc -z postgres 5432; do
-                echo "Waiting for postgres..."
+              until nc -z keycloak-db 5432; do
+                echo "Waiting for keycloak-db..."
                 sleep 2
               done
       containers:
         - name: keycloak
-          image: quay.io/keycloak/keycloak:26.7.2
+          image: ghcr.io/japerezsaavedra/ekumetrics-keycloak:26.7.2
           args:
-            - start-dev
+            - start
+            - --optimized
             - --import-realm
           env:
             - name: KC_BOOTSTRAP_ADMIN_USERNAME
@@ -63,26 +64,38 @@ spec:
                 secretKeyRef:
                   name: ekumetrics-secrets
                   key: keycloak_admin_password
-            - name: KC_HTTP_ENABLED
-              value: "true"
-            - name: KC_HOSTNAME_STRICT
-              value: "false"
-            - name: KC_HOSTNAME
-              value: http://auth.gd.lan
             - name: KC_DB
               value: postgres
             - name: KC_DB_URL
-              value: jdbc:postgresql://postgres:5432/ekumetrics
+              value: jdbc:postgresql://keycloak-db:5432/keycloak
             - name: KC_DB_USERNAME
-              value: ekumetrics
+              value: keycloak
             - name: KC_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: ekumetrics-secrets
-                  key: postgres_password
+                  key: keycloak_db_password
+            - name: KC_HOSTNAME
+              value: https://auth.ekumetrics.com
+            - name: KC_HOSTNAME_STRICT
+              value: "true"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_METRICS_ENABLED
+              value: "true"
+            - name: PORTAL_PUBLIC_URL
+              value: https://portal.ekumetrics.com
+            - name: API_PUBLIC_URL
+              value: https://api.ekumetrics.com
           ports:
             - name: http
               containerPort: 8080
+            - name: health
+              containerPort: 9000
           volumeMounts:
             - name: realm
               mountPath: /opt/keycloak/data/import
@@ -95,17 +108,17 @@ spec:
               memory: 2Gi
           livenessProbe:
             tcpSocket:
-              port: 8080
+              port: 9000
             initialDelaySeconds: 60
-            periodSeconds: 10
+            periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 20
           readinessProbe:
             httpGet:
               path: /health/ready
-              port: 8080
-            initialDelaySeconds: 40
-            periodSeconds: 10
+              port: 9000
+            initialDelaySeconds: 45
+            periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 20
       volumes:

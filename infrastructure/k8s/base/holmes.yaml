@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: holmes
+  labels:
+    app.kubernetes.io/name: holmes
+    app.kubernetes.io/component: ai
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 5050
+      targetPort: 5050
+  selector:
+    app.kubernetes.io/name: holmes
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: holmes
+  labels:
+    app.kubernetes.io/name: holmes
+    app.kubernetes.io/component: ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: holmes
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: holmes
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      initContainers:
+        - name: wait-for-prometheus
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z prometheus 9090; do
+                echo "Waiting for prometheus..."
+                sleep 2
+              done
+        - name: wait-for-loki
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z loki 3100; do
+                echo "Waiting for loki..."
+                sleep 2
+              done
+      containers:
+        - name: holmes
+          image: robustadev/holmes:0.35.0
+          workingDir: /app
+          command:
+            - python
+            - -u
+            - server.py
+          env:
+            - name: OPENAI_API_BASE
+              value: http://platform-api:3000/v1/ai/upstream
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ekumetrics-secrets
+                  key: holmes_upstream_key
+          ports:
+            - name: http
+              containerPort: 5050
+          volumeMounts:
+            - name: config
+              mountPath: /root/.holmes
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 5050
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5050
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 3
+      volumes:
+        - name: config
+          configMap:
+            name: holmes-config

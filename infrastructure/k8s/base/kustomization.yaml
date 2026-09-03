@@ -9,6 +9,7 @@ commonLabels:
 resources:
   - namespace.yaml
   - postgres.yaml
+  - keycloak-db.yaml
   - nats.yaml
   - prometheus.yaml
   - loki.yaml
@@ -20,6 +21,11 @@ resources:
   - platform-api.yaml
   - ingest-gateway.yaml
   - portal-web.yaml
+  - ollama.yaml
+  - holmes.yaml
+  - agent-edge.yaml
+  - node-exporter.yaml
+  - alloy.yaml
 
 configMapGenerator:
   - name: nats-config
@@ -52,7 +58,10 @@ configMapGenerator:
       - configs/grafana-dashboards-provider.yml
   - name: keycloak-realm
     files:
-      - configs/ekumetrics-realm.json
+      - configs/ekumetrics-production-realm.json
+  - name: holmes-config
+    files:
+      - configs/holmes-config.yaml
   - name: ingest-gateway-config
     files:
       - configs/ingest-gateway.conf.template

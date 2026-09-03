@@ -1,240 +1,334 @@
-# Despliegue de Ekumetrics en Kubernetes (k3s Lab)
+# Despliegue de Ekumetrics SaaS en Kubernetes
 
-Este directorio contiene los manifiestos de Kubernetes para desplegar ekumetrics-platform en un cluster k3s de laboratorio existente.
+Este directorio contiene los manifiestos de Kubernetes para desplegar ekumetrics-platform como SaaS público en **ekumetrics.com**.
 
-⚠️ **IMPORTANTE**: Este es un despliegue adicional para laboratorio. Los archivos de Docker Compose (`infrastructure/docker/`) siguen siendo la forma recomendada para despliegues locales y de producción. Ver `docs/operations.md` para más detalles.
+⚠️ **IMPORTANTE**: Este es el despliegue de producción del SaaS. Los archivos de Docker Compose (`infrastructure/docker/`) siguen siendo una alternativa válida para despliegues autoalojados. Ver `docs/operations.md` para más detalles.
 
-## Requisitos previos
+## Infraestructura
 
-- Cluster k3s HA con namespace `ekumetrics` ya creado
-- ResourceQuota del namespace: 12 CPU / 24Gi RAM / 400Gi storage (requests), 16 CPU / 30Gi RAM (límites)
-- StorageClass predeterminado: Longhorn
+### Cluster
+- k3s HA en Hetzner
+- 3 workers: 6 CPU / ~12Gi RAM cada uno (18 CPU / ~36Gi total)
+- IPs públicas de workers: `13.140.39.245`, `13.140.39.246`, `13.140.39.247`
+- Puertos expuestos: 80, 443 (web), 4317, 4318 (agent mTLS)
+- API k3s y SSH permanecen privados (no expuestos a internet)
+
+### DNS y certificados
+- **Dominios web**: `portal.ekumetrics.com`, `api.ekumetrics.com`, `auth.ekumetrics.com`, `grafana.ekumetrics.com`
+  - Cloudflare A records → IPs de workers (puede ser orange cloud, Traefik termina TLS)
+  - Certificados Let's Encrypt vía cert-manager ClusterIssuer `letsencrypt-prod`
+  - HTTP redirige a HTTPS automáticamente
+
+- **Dominio de agentes**: `ingest.ekumetrics.com`
+  - Cloudflare A records → IPs de workers (**DEBE ser DNS-only / grey cloud**)
+  - Orange cloud rompe mTLS client certificate verification
+  - Certificados de agente mTLS son de PKI interna, NO Let's Encrypt
+  - Puertos 4317 (OTLP gRPC) y 4318 (OTLP HTTP) expuestos vía LoadBalancer
+
+### Namespace
+- Nombre: `ekumetrics`
+- ResourceQuota sugerida:
+  - Requests: 14 CPU / 28Gi RAM / 400Gi storage
+  - Limits: 16 CPU / 32Gi RAM
+  - Máximo: 80 pods / 30 PVCs
+- StorageClass: Longhorn (predeterminado)
 - IngressClass: `traefik`
-- Control-plane nodes con taint NoSchedule (los workloads se programan solo en workers)
-- NetworkPolicy default-deny Ingress (permite tráfico same-namespace y desde kube-system)
+- NetworkPolicy: default-deny Ingress, permite same-namespace y kube-system
 
-## Servicios incluidos en el overlay de lab
+## Servicios incluidos
 
-El overlay `overlays/lab` despliega:
+El overlay `overlays/saas` despliega el stack completo de producción:
 
-- **postgres** (pgvector) - Base de datos principal
+### Base de datos e infraestructura
+- **postgres** (pgvector) - Base de datos de plataforma
+- **keycloak-db** - Base de datos dedicada para Keycloak
 - **nats** - Mensajería JetStream
-- **prometheus** - Métricas (30d retención, 8GB)
+
+### Observabilidad
+- **prometheus** - Métricas (30d retención)
 - **loki** - Logs (30d retención)
 - **tempo** - Trazas (30d retención)
 - **alertmanager** - Gestión de alertas
-- **grafana** - Visualización
+- **grafana** - Visualización del producto (NO cluster monitoring)
 - **otel-collector** - OpenTelemetry collector
-- **keycloak** - Identidad y autenticación (modo dev)
+- **node-exporter** - Métricas de host (DaemonSet)
+- **alloy** - Recolección de logs de pods Kubernetes
+
+### Aplicación
+- **keycloak** - Identidad y autenticación (modo producción optimizado)
 - **platform-api** - Backend de Ekumetrics
-- **ingest-gateway** - Gateway nginx para ingesta OTLP
 - **portal-web** - Frontend Angular
+- **ingest-gateway** - Gateway nginx para ingesta interna
+- **agent-edge** - Gateway mTLS para ingesta de agentes (LoadBalancer en 4317/4318)
 
-## Servicios NO incluidos (para evitar superar la quota)
+### IA
+- **ollama** - Runtime de modelos LLM
+- **ollama-pull** - Job para descargar modelos (`qwen3.5:4b` + `qwen3-embedding:0.6b`)
+- **holmes** - Perfil de investigación de IA
 
-Los siguientes servicios están disponibles en el Compose pero se excluyen del lab k8s por defecto:
+## Secretos requeridos
 
-- **ollama** + **ollama-pull** - Requiere demasiada RAM para la quota del lab
-- **holmes** - Perfil de IA (opcional)
-- **alloy** - Requiere acceso a docker.sock (no aplicable en k8s)
-- **node-exporter** - Puede agregarse después como DaemonSet
-- **agent-edge** - Borde mTLS para producción (no necesario en LAN de lab)
-
-## Crear el Secret de credenciales
-
-**Antes de aplicar los manifiestos**, cree el Secret con las credenciales:
+### 1. Secretos de aplicación
 
 ```bash
-# Generar contraseñas aleatorias seguras
+# Generar valores seguros
 PG_PASS=$(openssl rand -base64 24)
-KC_PASS=$(openssl rand -base64 24)
+KC_DB_PASS=$(openssl rand -base64 24)
+KC_ADMIN_PASS=$(openssl rand -base64 24)
 GF_PASS=$(openssl rand -base64 24)
 INGEST_KEY=$(openssl rand -hex 32)
+AGENT_EDGE_KEY=$(openssl rand -hex 32)
 KIOSK_SECRET=$(openssl rand -hex 32)
 BFF_SECRET=$(openssl rand -hex 32)
 AI_ENC_KEY=$(openssl rand -hex 32)
+HOLMES_KEY=$(openssl rand -hex 32)
 
-# Crear el Secret en el namespace ekumetrics
+# Crear Secret
 kubectl create secret generic ekumetrics-secrets \
   --namespace ekumetrics \
   --from-literal=postgres_password="${PG_PASS}" \
   --from-literal=database_url="postgresql://ekumetrics:${PG_PASS}@postgres:5432/ekumetrics?schema=public" \
-  --from-literal=keycloak_admin_password="${KC_PASS}" \
+  --from-literal=keycloak_db_password="${KC_DB_PASS}" \
+  --from-literal=keycloak_admin_password="${KC_ADMIN_PASS}" \
   --from-literal=grafana_admin_password="${GF_PASS}" \
   --from-literal=ingest_shared_key="${INGEST_KEY}" \
+  --from-literal=agent_edge_assertion_key="${AGENT_EDGE_KEY}" \
   --from-literal=kiosk_token_secret="${KIOSK_SECRET}" \
   --from-literal=bff_session_secret="${BFF_SECRET}" \
-  --from-literal=ai_settings_encryption_key="${AI_ENC_KEY}"
+  --from-literal=ai_settings_encryption_key="${AI_ENC_KEY}" \
+  --from-literal=holmes_upstream_key="${HOLMES_KEY}"
 
-# Guarde estas credenciales de forma segura
-echo "Postgres password: ${PG_PASS}"
-echo "Keycloak admin password: ${KC_PASS}"
-echo "Grafana admin password: ${GF_PASS}"
+# GUARDE estos valores en Vault o gestor de secretos
 ```
+
+### 2. Certificados mTLS para agentes
+
+Los agentes se autentican con certificados cliente firmados por una CA interna del producto.
+
+```bash
+# Requisitos de los certificados:
+# - ca.crt: CA raíz que firma certificados de agentes
+# - server.crt: Certificado del servidor con SAN DNS:ingest.ekumetrics.com
+# - server.key: Clave privada del servidor (modo 0400)
+# - Cada agente tiene cert cliente con Subject: O=<tenant_id>, OU=<site_id>, CN=<agent_id>
+
+kubectl create secret generic agent-tls \
+  --namespace ekumetrics \
+  --from-file=ca.crt=/path/to/ca.crt \
+  --from-file=server.crt=/path/to/server.crt \
+  --from-file=server.key=/path/to/server.key
+```
+
+**CRÍTICO**: El certificado `server.crt` es de PKI interna, NO de Let's Encrypt. Los agentes validan la cadena de confianza completa. Cloudflare para `ingest.ekumetrics.com` DEBE estar en modo DNS-only (grey cloud); orange cloud termina TLS y rompe la verificación de certificados cliente.
 
 ## Despliegue
 
-Una vez creado el Secret, aplique los manifiestos:
+### Pre-requisitos
+1. cert-manager instalado con ClusterIssuer `letsencrypt-prod`
+2. Traefik IngressController configurado
+3. Namespace `ekumetrics` creado con ResourceQuota
+4. Secrets `ekumetrics-secrets` y `agent-tls` creados
+
+### Aplicar manifiestos
 
 ```bash
 # Desde la raíz del repositorio
-kubectl apply -k infrastructure/k8s/overlays/lab
+kubectl apply -k infrastructure/k8s/overlays/saas
 ```
 
-Verifique el despliegue:
+### Verificar despliegue
 
 ```bash
-# Ver todos los pods
+# Ver estado de pods
 kubectl get pods -n ekumetrics
 
 # Ver PVCs
 kubectl get pvc -n ekumetrics
 
-# Ver Ingress
-kubectl get ingress -n ekumetrics
+# Ver Ingress y certificados
+kubectl get ingress,certificate -n ekumetrics
 
-# Ver eventos recientes
-kubectl get events -n ekumetrics --sort-by='.lastTimestamp' | tail -20
+# Ver LoadBalancer de agent-edge
+kubectl get svc agent-edge -n ekumetrics
 
-# Logs de un pod específico
-kubectl logs -n ekumetrics deployment/platform-api --tail=50
+# Logs de un servicio
+kubectl logs -n ekumetrics deployment/platform-api --tail=100 -f
+
+# Estado del Job de ollama-pull
+kubectl get job ollama-pull -n ekumetrics
+kubectl logs -n ekumetrics job/ollama-pull
 ```
 
-## Acceso a los servicios
+## Acceso a servicios
 
-Configure `/etc/hosts` en su máquina para apuntar a los workers del cluster:
+### Para usuarios finales (web)
+- **Portal**: https://portal.ekumetrics.com
+- **API**: https://api.ekumetrics.com (backend, no acceso directo)
+- **Grafana**: https://grafana.ekumetrics.com (embebido en portal)
+- **Keycloak**: https://auth.ekumetrics.com (OIDC provider)
 
+### Para agentes (mTLS)
+Los agentes se configuran con:
+- **Host**: `ingest.ekumetrics.com`
+- **Puertos**: 4317 (gRPC), 4318 (HTTP)
+- **Certificado cliente** con Subject `O=<tenant_id>, OU=<site_id>, CN=<agent_id>`
+- **CA bundle** que incluye la ca.crt del producto
+
+Ejemplo de configuración de agente OpenTelemetry:
+```yaml
+exporters:
+  otlp:
+    endpoint: ingest.ekumetrics.com:4317
+    tls:
+      insecure: false
+      ca_file: /etc/ekumetrics/ca.crt
+      cert_file: /etc/ekumetrics/agent.crt
+      key_file: /etc/ekumetrics/agent.key
 ```
-# Ajuste las IPs según su cluster (workers: 10.0.0.2, 10.0.0.3, 10.0.0.6)
-10.0.0.2  portal.gd.lan api.gd.lan grafana.eku.gd.lan auth.gd.lan
-```
 
-Luego acceda a:
+## Recursos dimensionados
 
-- **Portal**: http://portal.gd.lan
-- **API**: http://api.gd.lan
-- **Grafana**: http://grafana.eku.gd.lan (usuario: `ekumetrics`, contraseña: ver Secret)
-- **Keycloak**: http://auth.gd.lan (usuario: `admin`, contraseña: ver Secret)
+Los recursos están ajustados para el hardware real (3×6 CPU/12Gi):
 
-⚠️ **Nota**: Estos hostnames son para LAN interna. No están expuestos a internet público.
+| Servicio | CPU request | Memory request | CPU limit | Memory limit | Storage |
+|---|---:|---:|---:|---:|---:|
+| postgres | 500m | 1Gi | 2000m | 2Gi | 10Gi |
+| keycloak-db | 200m | 512Mi | 1000m | 1Gi | 5Gi |
+| nats | 100m | 256Mi | 500m | 512Mi | 5Gi |
+| prometheus | 500m | 1Gi | 2000m | 3Gi | 10Gi |
+| loki | 300m | 512Mi | 1000m | 2Gi | 10Gi |
+| tempo | 300m | 512Mi | 1000m | 2Gi | 10Gi |
+| alertmanager | 50m | 128Mi | 200m | 256Mi | 2Gi |
+| grafana | 200m | 256Mi | 500m | 1Gi | 2Gi |
+| otel-collector | 200m | 256Mi | 1000m | 1Gi | - |
+| keycloak | 500m | 768Mi | 2000m | 2Gi | - |
+| platform-api | 500m | 512Mi | 2000m | 2Gi | - |
+| ingest-gateway | 50m | 64Mi | 200m | 128Mi | - |
+| portal-web | 100m | 128Mi | 500m | 256Mi | - |
+| **ollama** | **1000m** | **4Gi** | **4000m** | **8Gi** | **20Gi** |
+| holmes | 200m | 512Mi | 1000m | 2Gi | - |
+| agent-edge | 100m | 128Mi | 500m | 256Mi | - |
+| node-exporter | 50m | 64Mi | 200m | 128Mi | - |
+| alloy | 100m | 128Mi | 500m | 512Mi | - |
+
+**Total aproximado**: ~5.5 CPU requests / ~11Gi RAM requests, ~18 CPU limits / ~28Gi RAM limits, ~74Gi storage.
+
+Ollama es el consumidor principal de RAM. Si el cluster tiene problemas de memoria, considere reducir el límite de Ollama o usar un nodo dedicado.
 
 ## Imágenes de contenedor
 
-Las imágenes de `platform-api` y `portal-web` se construyen y publican automáticamente en GHCR cuando se hace push a la rama `dev`:
-
+### Imágenes del producto
+Las imágenes de `platform-api` y `portal-web` se construyen y publican automáticamente en push a `dev`:
 - `ghcr.io/japerezsaavedra/ekumetrics-platform-api:dev`
 - `ghcr.io/japerezsaavedra/ekumetrics-portal-web:dev`
 
-Si los paquetes de GHCR se crean como privados, necesitará un `imagePullSecret`:
-
+### Imagen de Keycloak
+La imagen optimizada de Keycloak debe construirse y publicarse manualmente:
 ```bash
-kubectl create secret docker-registry ghcr-pull \
-  --namespace ekumetrics \
-  --docker-server=ghcr.io \
-  --docker-username=<GITHUB_USERNAME> \
-  --docker-password=<GITHUB_PAT>
-
-# Luego agregue a los Deployments:
-# imagePullSecrets:
-#   - name: ghcr-pull
+# Desde infrastructure/docker/keycloak/
+docker build -t ghcr.io/japerezsaavedra/ekumetrics-keycloak:26.7.2 -f Containerfile .
+docker push ghcr.io/japerezsaavedra/ekumetrics-keycloak:26.7.2
 ```
 
-## Recursos y límites
-
-Los recursos están dimensionados para cumplir con la ResourceQuota del namespace:
-
-| Servicio | CPU request | Memory request | CPU limit | Memory limit |
-|---|---:|---:|---:|---:|
-| postgres | 500m | 1Gi | 2000m | 2Gi |
-| nats | 100m | 256Mi | 500m | 512Mi |
-| prometheus | 500m | 1Gi | 2000m | 3Gi |
-| loki | 300m | 512Mi | 1000m | 2Gi |
-| tempo | 300m | 512Mi | 1000m | 2Gi |
-| alertmanager | 50m | 128Mi | 200m | 256Mi |
-| grafana | 200m | 256Mi | 500m | 1Gi |
-| otel-collector | 200m | 256Mi | 1000m | 1Gi |
-| keycloak | 500m | 768Mi | 2000m | 2Gi |
-| platform-api | 500m | 512Mi | 2000m | 2Gi |
-| ingest-gateway | 50m | 64Mi | 200m | 128Mi |
-| portal-web | 100m | 128Mi | 500m | 256Mi |
-| **TOTAL** | **~3.8 CPU** | **~5.3Gi** | **~12.4 CPU** | **~17.8Gi** |
-
-Los valores están por debajo de la quota (12 CPU / 24Gi RAM requests) dejando margen para bursts y réplicas adicionales.
-
-## Volúmenes persistentes
-
-Cada StatefulSet solicita un PVC:
-
-- postgres: 10Gi
-- nats: 5Gi
-- prometheus: 10Gi
-- loki: 10Gi
-- tempo: 10Gi
-- alertmanager: 2Gi
-- grafana: 2Gi
-
-**Total**: ~49Gi (dentro de la quota de 400Gi storage y 30 PVCs)
-
-Los tamaños están ajustados para un laboratorio. La retención de Prometheus se redujo a 8GB (vs 10GB en Compose).
+Si los paquetes de GHCR son privados, configure `imagePullSecret` en los Deployments.
 
 ## Solución de problemas
 
-### Los pods no inician (Pending)
+### Pods en CrashLoopBackOff
 
 ```bash
-# Ver estado del pod y eventos
+# Ver logs
+kubectl logs -n ekumetrics <pod-name> --previous
+
+# Ver eventos
 kubectl describe pod -n ekumetrics <pod-name>
 
-# Revisar quota del namespace
-kubectl describe resourcequota -n ekumetrics
-
-# Verificar PVCs
-kubectl get pvc -n ekumetrics
-```
-
-### ImagePullBackOff
-
-Si los paquetes de GHCR son privados, cree el imagePullSecret (ver sección "Imágenes de contenedor" arriba).
-
-### CrashLoopBackOff en platform-api
-
-Verifique que el Secret `ekumetrics-secrets` exista y contenga todas las claves requeridas:
-
-```bash
+# Verificar secretos
 kubectl get secret ekumetrics-secrets -n ekumetrics -o jsonpath='{.data}' | jq 'keys'
+kubectl get secret agent-tls -n ekumetrics
 ```
 
 ### Keycloak no arranca
 
-Keycloak tarda ~60s en iniciar la primera vez. Verifique los logs:
+Keycloak en modo producción optimizado puede tardar ~60-90s en iniciar la primera vez. Verifique que keycloak-db esté Ready primero.
 
 ```bash
-kubectl logs -n ekumetrics deployment/keycloak --tail=100
+kubectl logs -n ekumetrics deployment/keycloak
+kubectl logs -n ekumetrics statefulset/keycloak-db
 ```
 
-## Desinstalar
+### Ollama out of memory
 
-Para eliminar el despliegue pero conservar los datos:
+Si Ollama es killed por OOM, ajuste sus límites de memoria en base a los modelos cargados. Para `qwen3.5:4b`, 8Gi suele ser suficiente pero puede requerir más dependiendo de la carga.
+
+### Certificados Let's Encrypt pendientes
 
 ```bash
-kubectl delete -k infrastructure/k8s/overlays/lab
+# Ver estado de certificados
+kubectl get certificate -n ekumetrics
+kubectl describe certificate portal-tls -n ekumetrics
+
+# Ver challenges
+kubectl get challenges -n ekumetrics
+
+# Verificar issuer
+kubectl describe clusterissuer letsencrypt-prod
 ```
 
-Para eliminar también los PVCs (⚠️ **esto borra todos los datos**):
+Si cert-manager no puede validar, verifique que los DNS A records apunten a las IPs correctas y que el puerto 80 esté accesible.
+
+### Agent mTLS no funciona
+
+1. Verificar que `ingest.ekumetrics.com` resuelve a las IPs correctas
+2. Verificar que Cloudflare está en DNS-only (grey cloud), no orange cloud
+3. Verificar que el LoadBalancer de agent-edge tiene EXTERNAL-IP asignado
+4. Probar con openssl:
+   ```bash
+   openssl s_client -connect ingest.ekumetrics.com:4318 \
+     -cert agent.crt -key agent.key -CAfile ca.crt
+   ```
+5. Ver logs de agent-edge:
+   ```bash
+   kubectl logs -n ekumetrics deployment/agent-edge
+   ```
+
+### Ingesta funciona pero eventos no llegan
+
+Verificar que otel-collector, loki, tempo y prometheus estén Running y Ready. Ver logs de platform-api para errores de conexión.
+
+## Actualización
+
+Para actualizar a nuevas versiones de las imágenes:
 
 ```bash
-kubectl delete pvc -n ekumetrics --all
+# Las imágenes se actualizan automáticamente en push a dev
+# Para forzar re-pull:
+kubectl rollout restart deployment/platform-api -n ekumetrics
+kubectl rollout restart deployment/portal-web -n ekumetrics
+
+# Verificar rollout
+kubectl rollout status deployment/platform-api -n ekumetrics
 ```
+
+## Backup y recuperación
+
+- **PostgreSQL**: Implementar backup regular de `postgres` y `keycloak-db` (pg_dump o Longhorn snapshots)
+- **PVCs**: Longhorn snapshots o Velero para disaster recovery
+- **Secretos**: Almacenar en Vault u otro gestor de secretos fuera del cluster
+- **Certificados agent-tls**: Mantener copia segura de la CA y renovar server.crt antes de expiración
+
+## Monitoreo externo
+
+El stack incluye Prometheus/Grafana del producto. Para monitoreo del cluster (nodes, k3s, Traefik), instale kube-prometheus-stack en un namespace separado o use un sistema externo.
 
 ## Relación con Docker Compose
 
-Este despliegue de Kubernetes es **complementario** al Docker Compose. Las configuraciones base (Prometheus, Loki, Tempo, OTEL, Grafana, Keycloak realm) se copian desde `infrastructure/docker/`.
+Este despliegue de Kubernetes reutiliza las configuraciones de `infrastructure/docker/docker-compose.production.yml`. Las diferencias principales:
 
-Para despliegues de producción, sigue siendo recomendable usar Docker Compose con el override `docker-compose.production.yml` según se documenta en `docs/operations.md`.
+- Keycloak usa base de datos dedicada (keycloak-db)
+- agent-edge expuesto vía LoadBalancer en lugar de bind host
+- Alloy configurado para descubrir pods de Kubernetes en lugar de contenedores Docker
+- node-exporter como DaemonSet en lugar de contenedor único
+- Secrets en Kubernetes Secrets en lugar de archivos montados
 
-## Siguientes pasos
-
-- Agregar DaemonSet de node-exporter si se necesita monitoreo de host
-- Crear overlay de producción con Keycloak optimizado y base de datos dedicada
-- Configurar HorizontalPodAutoscaler para platform-api si la carga aumenta
-- Configurar backup de PVCs (Longhorn snapshots o Velero)
+Docker Compose sigue siendo una opción válida para despliegues autoalojados fuera de Kubernetes.

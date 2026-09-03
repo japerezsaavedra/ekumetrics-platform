@@ -9,7 +9,7 @@ resources:
   - secret-placeholder.yaml
 
 commonLabels:
-  environment: lab
+  environment: production
 
 patchesStrategicMerge:
   - patches/prometheus-retention.yaml
