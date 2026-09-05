@@ -1,0 +1,98 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+processors:
+  batch: {}
+  # El input journald relee el stdout de Fluent Bit (HTTP 200 cada flush).
+  filter/fluentbit_echo:
+    error_mode: ignore
+    logs:
+      log_record:
+        - 'IsMap(body) and IsMatch(body["MESSAGE"], "\\[fluentbit\\]")'
+        - 'IsString(body) and IsMatch(body, "\\[fluentbit\\]")'
+  # El agente envia agent.id / tenant.id / host.site como recurso OTLP.
+  # Prometheus no copia recursos a labels salvo que se promuevan aqui.
+  transform/metrics:
+    error_mode: ignore
+    metric_statements:
+      - context: datapoint
+        statements:
+          - set(datapoint.attributes["agent_id"], resource.attributes["agent.id"]) where resource.attributes["agent.id"] != nil
+          - set(datapoint.attributes["tenant_id"], resource.attributes["tenant.id"]) where resource.attributes["tenant.id"] != nil
+          - set(datapoint.attributes["site_id"], resource.attributes["host.site"]) where resource.attributes["host.site"] != nil
+          - set(datapoint.attributes["icewarp_svc"], resource.attributes["icewarp_svc"]) where resource.attributes["icewarp_svc"] != nil
+          - set(datapoint.attributes["process"], resource.attributes["process.executable.name"]) where resource.attributes["process.executable.name"] != nil
+          - set(datapoint.attributes["process"], resource.attributes["process.command"]) where datapoint.attributes["process"] == nil and resource.attributes["process.command"] != nil
+          - set(datapoint.attributes["pid"], resource.attributes["process.pid"]) where resource.attributes["process.pid"] != nil
+  # Fluent Bit 5 (classic) pone service.name en el cuerpo, no en el recurso.
+  # Loki indexa service_name solo desde resource.attributes["service.name"].
+  transform/logs:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - set(resource.attributes["service.name"], log.attributes["service.name"]) where resource.attributes["service.name"] == nil and log.attributes["service.name"] != nil
+          - set(resource.attributes["service.name"], log.body["service.name"]) where resource.attributes["service.name"] == nil and IsMap(log.body) and log.body["service.name"] != nil
+          - set(resource.attributes["tenant_id"], resource.attributes["tenant.id"]) where resource.attributes["tenant.id"] != nil
+          - set(resource.attributes["site_id"], resource.attributes["host.site"]) where resource.attributes["host.site"] != nil
+          - set(resource.attributes["agent_id"], resource.attributes["agent.id"]) where resource.attributes["agent.id"] != nil
+          - set(resource.attributes["tenant.id"], resource.attributes["tenant_id"]) where resource.attributes["tenant.id"] == nil and resource.attributes["tenant_id"] != nil
+          - set(resource.attributes["host.site"], resource.attributes["site_id"]) where resource.attributes["host.site"] == nil and resource.attributes["site_id"] != nil
+          - set(resource.attributes["agent.id"], resource.attributes["agent_id"]) where resource.attributes["agent.id"] == nil and resource.attributes["agent_id"] != nil
+          - set(resource.attributes["service.namespace"], "ekumetrics") where resource.attributes["service.namespace"] == nil
+          - set(resource.attributes["service.name"], "ekumetrics-agent") where resource.attributes["service.name"] == nil
+          - set(resource.attributes["service.instance.id"], resource.attributes["agent.id"]) where resource.attributes["service.instance.id"] == nil and resource.attributes["agent.id"] != nil
+          - set(log.attributes["trace_id"], trace_id.string) where trace_id.string != "00000000000000000000000000000000"
+          - set(log.attributes["span_id"], span_id.string) where span_id.string != "0000000000000000"
+  # Las dimensiones canonicas permanecen en el recurso de cada span. Tempo
+  # conserva trace_id/span_id como campos intrinsecos, sin duplicarlos.
+  transform/traces:
+    error_mode: ignore
+    trace_statements:
+      - context: resource
+        statements:
+          - set(attributes["tenant.id"], attributes["tenant_id"]) where attributes["tenant.id"] == nil and attributes["tenant_id"] != nil
+          - set(attributes["host.site"], attributes["site_id"]) where attributes["host.site"] == nil and attributes["site_id"] != nil
+          - set(attributes["agent.id"], attributes["agent_id"]) where attributes["agent.id"] == nil and attributes["agent_id"] != nil
+          - set(attributes["service.namespace"], "ekumetrics") where attributes["service.namespace"] == nil
+          - set(attributes["service.name"], "ekumetrics-agent") where attributes["service.name"] == nil
+          - set(attributes["service.instance.id"], attributes["agent.id"]) where attributes["service.instance.id"] == nil and attributes["agent.id"] != nil
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+  otlp_http/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+
+service:
+  extensions: [health_check]
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [transform/metrics, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [filter/fluentbit_echo, transform/logs, batch]
+      exporters: [otlp_http/loki]
+    traces:
+      receivers: [otlp]
+      processors: [transform/traces, batch]
+      exporters: [otlp/tempo]

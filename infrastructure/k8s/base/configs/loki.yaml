@@ -1,0 +1,79 @@
+# Loki 3.7 — retención temporal alineada con la ventana SLO de 30 días.
+# Configuración monolítica para el despliegue local del producto.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: info
+  grpc_server_max_concurrent_streams: 1000
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+limits_config:
+  metric_aggregation_enabled: true
+  retention_period: 720h
+  max_query_lookback: 720h
+  # Dimensiones de aislamiento promovidas desde recursos OTLP. EkuAssistant
+  # nunca consulta el stream global: tenant, sitio y agente son obligatorios.
+  otlp_config:
+    resource_attributes:
+      attributes_config:
+        - action: index_label
+          attributes:
+            - tenant_id
+            - site_id
+            - agent_id
+
+# En una única instancia no existe un rolling update al que dar tiempo para
+# propagar el ring. El valor predeterminado de 15 s puede mantener /ready en
+# 503 de forma innecesaria después de reinicios locales.
+ingester:
+  lifecycler:
+    min_ready_duration: 0s
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150
+  delete_request_store: filesystem
+
+pattern_ingester:
+  enabled: true
+  metric_aggregation:
+    loki_address: localhost:3100
+
+ruler:
+  alertmanager_url: http://alertmanager:9093
+
+frontend:
+  encoding: protobuf

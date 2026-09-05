@@ -4,6 +4,12 @@
 
 `infrastructure/docker/docker-compose.yml` es el despliegue local del producto. De fábrica publica solo en `127.0.0.1`. Para una prueba controlada en LAN, defina explícitamente `BIND_ADDR` y `PUBLIC_HOST` en `infrastructure/docker/.env` y aplique controles de firewall.
 
+### Despliegue en Kubernetes (Lab)
+
+Para despliegues en clusters k3s de laboratorio, existe un packaging adicional de Kubernetes con kustomize en `infrastructure/k8s/`. Este despliegue es complementario y está documentado en [infrastructure/k8s/README.md](../infrastructure/k8s/README.md). Los manifiestos de Kubernetes reutilizan las mismas configuraciones base (Prometheus, Loki, Tempo, OTEL, Grafana, Keycloak realm) que el despliegue de Compose.
+
+**Importante**: El despliegue de Kubernetes es específico para entornos de laboratorio con recursos limitados. Para producción, siga usando Docker Compose con el override `docker-compose.production.yml` documentado más abajo.
+
 El despliegue productivo debe añadir `infrastructure/docker/docker-compose.production.yml`. Este override sustituye `start-dev` por una imagen optimizada de Keycloak, usa una base de datos dedicada, elimina los usuarios de demostración, deshabilita Resource Owner Password Credentials, consume secretos montados y publica la entrada de agentes solo a través de mTLS. Requiere un proxy TLS que publique `PORTAL_PUBLIC_URL`, `API_PUBLIC_URL`, `GRAFANA_PUBLIC_URL` y `KEYCLOAK_PUBLIC_URL`, establezca correctamente `X-Forwarded-*` y solo permita alcanzar los puertos internos desde una red confiable. Los cuatro valores deben ser orígenes HTTPS sin ruta, query ni fragmento y usar hostnames distintos para preservar separación de origen; el portal los recibe en `runtime-config.js`, por lo que una misma imagen inmutable sirve para distintos entornos sin recompilar ni degradar HTTPS.
 
 ```bash

@@ -1,0 +1,28 @@
+server {
+  listen 4318;
+  server_name _;
+  client_max_body_size 4m;
+
+  location = /healthz {
+    default_type application/json;
+    return 200 '{"status":"ok","service":"ingest-gateway"}\n';
+  }
+
+  location = /v1/ekms/events {
+    limit_except POST { deny all; }
+    proxy_http_version 1.1;
+    proxy_set_header X-Ekumetrics-Ingest-Key "${INGEST_SHARED_KEY}";
+    proxy_set_header Content-Type $content_type;
+    proxy_set_header Content-Encoding $http_content_encoding;
+    proxy_pass http://platform-api:3000;
+  }
+
+  location /v1/ {
+    proxy_http_version 1.1;
+    proxy_pass http://otel-collector:4318;
+  }
+
+  location / {
+    return 404;
+  }
+}
