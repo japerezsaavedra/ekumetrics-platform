@@ -5,6 +5,11 @@ import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { API_BASE_URL } from '../../core/api';
 import { TenantService, type TenantOption } from '../../core/tenant';
+import {
+  TENANT_MODULE_CATALOG,
+  parseTenantModules,
+  type OptionalTenantModule,
+} from '../../core/tenant-modules';
 import { EkuErrorStateComponent } from '../../shared/eku/error-state/eku-error-state';
 import { EkuPageHeaderComponent } from '../../shared/eku/page-header/eku-page-header';
 import {
@@ -33,6 +38,7 @@ export class TenantsPage {
 
   protected readonly items = this.tenants.tenants;
   protected readonly isOperator = this.tenants.isOperator;
+  protected readonly moduleCatalog = TENANT_MODULE_CATALOG;
   protected readonly formOpen = signal(false);
   protected readonly editingSlug = signal<string | null>(null);
   protected readonly created = signal<{ email: string; temporaryPassword: string } | null>(null);
@@ -47,6 +53,13 @@ export class TenantsPage {
       adminEmail: ['', [Validators.required, Validators.email]],
       siteName: ['Sede principal', [Validators.required, Validators.minLength(2)]],
       siteSlug: ['local', [Validators.pattern(/^[a-z0-9._-]+$/)]],
+      modules: this.fb.nonNullable.group({
+        icewarp: false,
+        sap: false,
+        databases: false,
+        queues: false,
+        network: false,
+      }),
     },
     { validators: [emailMatchesSiblingDomain('emailDomain', 'adminEmail')] },
   );
@@ -87,6 +100,7 @@ export class TenantsPage {
       adminEmail: '',
       siteName: 'Sede principal',
       siteSlug: 'local',
+      modules: this.emptyModules(),
     });
     this.form.controls.slug.enable();
     this.form.controls.adminName.enable();
@@ -96,7 +110,7 @@ export class TenantsPage {
   }
 
   protected edit(item: TenantOption): void {
-    if (!this.isOperator() || item.slug === 'default') {
+    if (!this.isOperator()) {
       return;
     }
     this.formOpen.set(true);
@@ -111,6 +125,7 @@ export class TenantsPage {
       adminEmail: item.users?.[0]?.email ?? `admin@${item.emailDomain || 'cliente.com'}`,
       siteName: item.sites?.[0]?.name ?? 'Sede principal',
       siteSlug: item.sites?.[0]?.slug ?? 'local',
+      modules: this.modulesValue(item.modules),
     });
     this.form.controls.slug.disable();
     this.form.controls.adminName.disable();
@@ -159,10 +174,12 @@ export class TenantsPage {
     this.error.set(null);
     const value = this.form.getRawValue();
     const editingSlug = this.editingSlug();
+    const modules = this.selectedModules();
     const request = editingSlug
       ? this.http.patch<TenantOption>(`${API_BASE_URL}/v1/tenants/${editingSlug}?as=default`, {
           name: value.name,
           emailDomain: value.emailDomain,
+          modules,
         })
       : this.http.post<TenantOption>(`${API_BASE_URL}/v1/tenants?as=default`, {
           name: value.name,
@@ -172,6 +189,7 @@ export class TenantsPage {
           adminEmail: value.adminEmail,
           siteName: value.siteName,
           siteSlug: value.siteSlug || undefined,
+          modules,
         });
     request.subscribe({
       next: (tenant) => {
@@ -189,6 +207,7 @@ export class TenantsPage {
           adminEmail: '',
           siteName: 'Sede principal',
           siteSlug: 'local',
+          modules: this.emptyModules(),
         });
         this.formOpen.set(false);
         this.editingSlug.set(null);
@@ -222,5 +241,35 @@ export class TenantsPage {
       return item.slug === 'default' ? 'Operador Gradotech' : 'Sin administrador';
     }
     return `${admin.displayName} · ${admin.email}`;
+  }
+
+  protected modulesLabel(item: TenantOption): string {
+    const ids = parseTenantModules(item.modules);
+    if (!ids.length) {
+      return 'Solo nucleo';
+    }
+    return ids
+      .map((id) => this.moduleCatalog.find((entry) => entry.id === id)?.label ?? id)
+      .join(', ');
+  }
+
+  private selectedModules(): OptionalTenantModule[] {
+    const value = this.form.controls.modules.getRawValue();
+    return this.moduleCatalog.filter((item) => value[item.id]).map((item) => item.id);
+  }
+
+  private modulesValue(modules?: string[]) {
+    const enabled = new Set(parseTenantModules(modules));
+    return {
+      icewarp: enabled.has('icewarp'),
+      sap: enabled.has('sap'),
+      databases: enabled.has('databases'),
+      queues: enabled.has('queues'),
+      network: enabled.has('network'),
+    };
+  }
+
+  private emptyModules() {
+    return this.modulesValue([]);
   }
 }

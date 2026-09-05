@@ -48,6 +48,7 @@ describe('RetrievalService', () => {
     prisma.tenant.findUnique.mockResolvedValue({
       id: 'tenant-db-a',
       slug: 'tenant-a',
+      modules: [],
     });
     prisma.agent.findUnique.mockResolvedValue({
       id: 'agent-db-a',
@@ -87,6 +88,22 @@ describe('RetrievalService', () => {
     expect(evidence?.operation).toBe('get_metric_series:load_1m');
     expect(typeof evidence?.window.start).toBe('string');
     expect(typeof evidence?.window.end).toBe('string');
+  });
+
+  it('no consulta metricas de un modulo que el tenant no tiene', async () => {
+    const result = await service.getMetricSeries(context, 'sap_sessions', 60);
+    expect(result.data).toEqual([]);
+    expect(telemetry.range).not.toHaveBeenCalled();
+  });
+
+  it('consulta metricas de un modulo activo', async () => {
+    prisma.tenant.findUnique.mockResolvedValue({
+      id: 'tenant-db-a',
+      slug: 'tenant-a',
+      modules: ['sap'],
+    });
+    await service.getMetricSeries(context, 'sap_sessions', 60);
+    expect(rangeInput?.query).toContain('ekms_sap_sessions_total');
   });
 
   it('rechaza nombres de metrica que intenten introducir PromQL', async () => {

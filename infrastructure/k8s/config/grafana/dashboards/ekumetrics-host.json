@@ -1,0 +1,327 @@
+{
+  "uid": "ekms-host",
+  "title": "Ekumetrics — Host",
+  "description": "CPU, memoria, disco, filesystem y red del servidor donde corre el agente (metrics.host).",
+  "tags": ["ekumetrics", "host"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 2,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "agent",
+        "label": "Agente",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "Prometheus" },
+        "query": "label_values(system_cpu_logical_count, exported_job)",
+        "refresh": 2,
+        "includeAll": false,
+        "current": { "text": "ekumetrics-agent", "value": "ekumetrics-agent" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "CPUs",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none" },
+      "targets": [{ "refId": "A", "expr": "system_cpu_logical_count{exported_job=\"$agent\"}", "legendFormat": "CPUs" }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "CPU en uso",
+      "gridPos": { "h": 4, "w": 5, "x": 4, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.7 }, { "color": "red", "value": 0.9 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1 - sum(rate(system_cpu_time_seconds_total{exported_job=\"$agent\",state=\"idle\"}[5m])) / sum(rate(system_cpu_time_seconds_total{exported_job=\"$agent\"}[5m]))",
+          "legendFormat": "CPU"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Memoria usada",
+      "gridPos": { "h": 4, "w": 5, "x": 9, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.9 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(system_memory_usage_bytes{exported_job=\"$agent\",state=\"used\"}) / sum(system_memory_usage_bytes{exported_job=\"$agent\"})",
+          "legendFormat": "Usada"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Load 1m",
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 2 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none" },
+      "targets": [{ "refId": "A", "expr": "system_cpu_load_average_1m{exported_job=\"$agent\"}", "legendFormat": "load 1m" }]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Disco / usado",
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.9 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(system_filesystem_usage_bytes{exported_job=\"$agent\",mountpoint=\"/\",state=\"used\"}) / sum(system_filesystem_usage_bytes{exported_job=\"$agent\",mountpoint=\"/\"})",
+          "legendFormat": "/"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Carga (1m / 5m / 15m)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10, "spanNulls": true } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "system_cpu_load_average_1m{exported_job=\"$agent\"}", "legendFormat": "1m" },
+        { "refId": "B", "expr": "system_cpu_load_average_5m{exported_job=\"$agent\"}", "legendFormat": "5m" },
+        { "refId": "C", "expr": "system_cpu_load_average_15m{exported_job=\"$agent\"}", "legendFormat": "15m" }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "CPU por estado",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" }, "spanNulls": true } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (state) (rate(system_cpu_time_seconds_total{exported_job=\"$agent\"}[5m])) / ignoring(state) group_left sum(rate(system_cpu_time_seconds_total{exported_job=\"$agent\"}[5m]))",
+          "legendFormat": "{{state}}"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Memoria por estado",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" }, "spanNulls": true } }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "system_memory_usage_bytes{exported_job=\"$agent\"}", "legendFormat": "{{state}}" }]
+    },
+    {
+      "id": 201,
+      "type": "bargauge",
+      "title": "Uso de disco por montaje",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.9 }] }
+        },
+        "overrides": []
+      },
+      "options": { "orientation": "horizontal", "displayMode": "lcd", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mountpoint) (system_filesystem_usage_bytes{exported_job=\"$agent\",state=\"used\",type!=\"squashfs\",mountpoint!~\"/snap.*\"}) / sum by (mountpoint) (system_filesystem_usage_bytes{exported_job=\"$agent\",type!=\"squashfs\",mountpoint!~\"/snap.*\"})",
+          "legendFormat": "{{mountpoint}}"
+        }
+      ]
+    },
+    {
+      "id": 202,
+      "type": "table",
+      "title": "Espacio usado / libre / total",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Usado" }, "properties": [{ "id": "unit", "value": "bytes" }] },
+          { "matcher": { "id": "byName", "options": "Libre" }, "properties": [{ "id": "unit", "value": "bytes" }] },
+          { "matcher": { "id": "byName", "options": "Total" }, "properties": [{ "id": "unit", "value": "bytes" }] },
+          {
+            "matcher": { "id": "byName", "options": "Uso" },
+            "properties": [
+              { "id": "unit", "value": "percentunit" },
+              { "id": "custom.cellOptions", "value": { "type": "color-background" } },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.9 }] } }
+            ]
+          }
+        ]
+      },
+      "options": { "showHeader": true, "sortBy": [{ "displayName": "Uso", "desc": true }] },
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true },
+            "renameByName": {
+              "mountpoint": "Montaje",
+              "device": "Dispositivo",
+              "type": "Tipo",
+              "Value #A": "Usado",
+              "Value #B": "Libre",
+              "Value #C": "Total",
+              "Value #D": "Uso"
+            }
+          }
+        }
+      ],
+      "targets": [
+        { "refId": "A", "instant": true, "format": "table", "expr": "sum by (mountpoint, device, type) (system_filesystem_usage_bytes{exported_job=\"$agent\",state=\"used\",type!=\"squashfs\",mountpoint!~\"/snap.*\"})" },
+        { "refId": "B", "instant": true, "format": "table", "expr": "sum by (mountpoint, device, type) (system_filesystem_usage_bytes{exported_job=\"$agent\",state=\"free\",type!=\"squashfs\",mountpoint!~\"/snap.*\"})" },
+        { "refId": "C", "instant": true, "format": "table", "expr": "sum by (mountpoint, device, type) (system_filesystem_usage_bytes{exported_job=\"$agent\",type!=\"squashfs\",mountpoint!~\"/snap.*\"})" },
+        { "refId": "D", "instant": true, "format": "table", "expr": "sum by (mountpoint, device, type) (system_filesystem_usage_bytes{exported_job=\"$agent\",state=\"used\",type!=\"squashfs\",mountpoint!~\"/snap.*\"}) / sum by (mountpoint, device, type) (system_filesystem_usage_bytes{exported_job=\"$agent\",type!=\"squashfs\",mountpoint!~\"/snap.*\"})" }
+      ]
+    },
+    {
+      "id": 203,
+      "type": "timeseries",
+      "title": "Porcentaje de disco usado",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1, "custom": { "fillOpacity": 10, "spanNulls": true } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mountpoint) (system_filesystem_usage_bytes{exported_job=\"$agent\",state=\"used\",type!=\"squashfs\",mountpoint!~\"/snap.*\"}) / sum by (mountpoint) (system_filesystem_usage_bytes{exported_job=\"$agent\",type!=\"squashfs\",mountpoint!~\"/snap.*\"})",
+          "legendFormat": "{{mountpoint}}"
+        }
+      ]
+    },
+    {
+      "id": 204,
+      "type": "timeseries",
+      "title": "Espacio libre",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 10, "spanNulls": true } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mountpoint) (system_filesystem_usage_bytes{exported_job=\"$agent\",state=\"free\",type!=\"squashfs\",mountpoint!~\"/snap.*\"})",
+          "legendFormat": "{{mountpoint}}"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "Disco I/O (sin loop)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps", "custom": { "fillOpacity": 10, "spanNulls": true } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "rate(system_disk_io_bytes_total{exported_job=\"$agent\",device!~\"loop.*\"}[5m])", "legendFormat": "{{device}} {{direction}}" }
+      ]
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Disco operaciones / s (sin loop)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10, "spanNulls": true } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "rate(system_disk_operations_total{exported_job=\"$agent\",device!~\"loop.*\"}[5m])", "legendFormat": "{{device}} {{direction}}" }
+      ]
+    },
+    {
+      "id": 40,
+      "type": "timeseries",
+      "title": "Red I/O (sin lo)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps", "custom": { "fillOpacity": 10, "spanNulls": true } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "rate(system_network_io_bytes_total{exported_job=\"$agent\",device!=\"lo\"}[5m])", "legendFormat": "{{device}} {{direction}}" }
+      ]
+    },
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "Paquetes de red (sin lo)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "pps", "custom": { "fillOpacity": 10, "spanNulls": true } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "rate(system_network_packets_total{exported_job=\"$agent\",device!=\"lo\"}[5m])", "legendFormat": "{{device}} {{direction}}" }
+      ]
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Red errores y descartes",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 52 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10, "spanNulls": true } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "rate(system_network_errors_total{exported_job=\"$agent\",device!=\"lo\"}[5m])", "legendFormat": "errors {{device}} {{direction}}" },
+        { "refId": "B", "expr": "rate(system_network_dropped_total{exported_job=\"$agent\",device!=\"lo\"}[5m])", "legendFormat": "dropped {{device}} {{direction}}" }
+      ]
+    },
+    {
+      "id": 50,
+      "type": "timeseries",
+      "title": "Conexiones de red",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 52 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10, "spanNulls": true } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "system_network_connections{exported_job=\"$agent\"}", "legendFormat": "{{protocol}} {{state}}" }
+      ]
+    }
+  ]
+}

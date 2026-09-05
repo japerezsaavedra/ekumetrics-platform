@@ -2,6 +2,11 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { API_BASE_URL } from './api';
 import { AuthService } from './auth';
+import {
+  parseTenantModules,
+  tenantHasModule,
+  type OptionalTenantModule,
+} from './tenant-modules';
 
 const STORAGE_KEY = 'eku-tenant';
 
@@ -16,6 +21,7 @@ export type TenantOption = {
   slug: string;
   name: string;
   emailDomain?: string | null;
+  modules?: string[];
   _count?: { agents: number; users: number; sites: number };
   users?: Array<{ email: string; displayName: string; role: string }>;
   sites?: TenantSite[];
@@ -27,10 +33,12 @@ export class TenantService {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   readonly tenants = signal<TenantOption[]>([]);
+  readonly ready = signal(false);
   readonly slug = signal(this.readSlug());
   readonly current = computed(
     () => this.tenants().find((item) => item.slug === this.slug()) ?? this.tenants()[0] ?? null,
   );
+  readonly enabledModules = computed(() => parseTenantModules(this.current()?.modules));
   readonly isOperator = this.auth.isOperator;
 
   constructor() {
@@ -53,6 +61,7 @@ export class TenantService {
     this.http.get<TenantOption[]>(`${API_BASE_URL}/v1/tenants`).subscribe({
       next: (items) => {
         this.tenants.set(items);
+        this.ready.set(true);
         const stored = this.slug() || this.readSlug();
         if (stored && items.some((item) => item.slug === stored)) {
           if (stored !== this.slug()) {
@@ -64,7 +73,14 @@ export class TenantService {
           this.select(this.auth.tenant() || items[0]?.slug || 'default');
         }
       },
+      error: () => {
+        this.ready.set(true);
+      },
     });
+  }
+
+  hasModule(id: OptionalTenantModule): boolean {
+    return tenantHasModule(this.current()?.modules, id);
   }
 
   select(slug: string): void {

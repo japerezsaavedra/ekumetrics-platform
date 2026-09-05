@@ -16,6 +16,7 @@ El directorio `infrastructure/docker` contiene el despliegue local reproducible 
 | Gateway de ingesta | Enrutamiento HTTP para desarrollo local | Ninguno |
 | OpenTelemetry Collector | Recepción y transformación OTLP | Ninguno |
 | Prometheus | Métricas | Volumen `prometheus-data` |
+| kube-state-metrics | Objetos del clúster Kubernetes para E-Platform | Ninguno |
 | Loki | Logs | Volumen `loki-data` |
 | Tempo | Trazas y búsqueda TraceQL | Volumen `tempo-data` |
 | Grafana | Exploración y dashboards | Volumen `grafana-data` |

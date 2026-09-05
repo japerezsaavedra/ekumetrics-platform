@@ -1,0 +1,59 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../k8s
+
+images:
+  - name: ekumetrics/platform-api
+    newTag: kind
+  - name: ekumetrics/portal-web
+    newTag: kind
+
+configMapGenerator:
+  - name: platform-config
+    behavior: merge
+    literals:
+      - PORTAL_PUBLIC_URL=http://ekumetrics.lvh.me
+      - API_PUBLIC_URL=http://api-ekumetrics.lvh.me
+      - KEYCLOAK_URL=http://auth-ekumetrics.lvh.me
+      - CORS_ORIGIN=http://ekumetrics.lvh.me
+      - PORTAL_API_URL=http://api-ekumetrics.lvh.me
+      - PORTAL_GRAFANA_URL=http://grafana-ekumetrics.lvh.me
+  - name: keycloak-realm
+    behavior: replace
+    files:
+      - ekumetrics-realm.json=keycloak-realm.json
+
+patches:
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: ekumetrics
+    path: ingress-json.yaml
+  - path: keycloak-hostname.yaml
+  - path: ollama-scale.yaml
+  - target:
+      kind: Job
+      name: ollama-pull
+    patch: |-
+      $patch: delete
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: ollama-pull
+  - target:
+      kind: PersistentVolumeClaim
+    patch: |-
+      - op: replace
+        path: /spec/storageClassName
+        value: standard
+  - target:
+      kind: PersistentVolumeClaim
+      name: alertmanager-config
+    patch: |-
+      - op: replace
+        path: /spec/accessModes
+        value:
+          - ReadWriteOnce

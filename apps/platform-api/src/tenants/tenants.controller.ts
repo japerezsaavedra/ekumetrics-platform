@@ -24,6 +24,7 @@ type TenantBody = {
   adminName?: string;
   siteName?: string;
   siteSlug?: string;
+  modules?: string[];
 };
 
 type SiteBody = {
@@ -70,6 +71,7 @@ export class TenantsController {
       body.emailDomain,
       body.siteName,
       body.siteSlug,
+      body.modules,
     );
   }
 
@@ -88,6 +90,7 @@ export class TenantsController {
       slug,
       body.name,
       body.emailDomain,
+      body.modules,
     );
   }
 

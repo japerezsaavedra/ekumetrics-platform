@@ -91,6 +91,54 @@ describe('TenantsService tenant isolation', () => {
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
+  it('impide a un administrador cambiar los modulos de un tenant', async () => {
+    const { tenants, prisma } = service();
+    await expect(
+      tenants.updateTenant('acme', 'acme', 'Acme', 'acme.test', ['sap']),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.tenant.findUnique).not.toHaveBeenCalled();
+    expect(prisma.tenant.update).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un modulo que no esta en el catalogo', async () => {
+    const { tenants, prisma } = service();
+    prisma.tenant.findUnique.mockResolvedValue({
+      id: 'acme-id',
+      slug: 'acme',
+      name: 'Acme',
+      emailDomain: 'acme.test',
+      modules: [],
+    });
+    await expect(
+      tenants.updateTenant('default', 'acme', 'Acme', 'acme.test', [
+        'icewarp',
+        'otro',
+      ]),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.tenant.update).not.toHaveBeenCalled();
+  });
+
+  it('permite al operator guardar los modulos del tenant', async () => {
+    const { tenants, prisma } = service();
+    prisma.tenant.findUnique.mockResolvedValue({
+      id: 'acme-id',
+      slug: 'acme',
+      name: 'Acme',
+      emailDomain: 'acme.test',
+      modules: [],
+    });
+    prisma.tenant.update.mockResolvedValue({ id: 'acme-id', modules: ['sap'] });
+
+    await tenants.updateTenant('default', 'acme', 'Acme', 'acme.test', ['sap']);
+
+    expect(prisma.tenant.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'acme-id' },
+        data: expect.objectContaining({ modules: ['sap'] }),
+      }),
+    );
+  });
+
   it('impide eliminar un sitio con pantallas de monitoreo activas', async () => {
     const { tenants, prisma } = service();
     prisma.tenant.findUnique.mockResolvedValue({

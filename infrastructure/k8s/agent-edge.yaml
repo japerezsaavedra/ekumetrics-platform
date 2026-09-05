@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-edge
+  labels:
+    app.kubernetes.io/name: agent-edge
+    app.kubernetes.io/component: ingest
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: agent-edge
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+      nodePort: 30427
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+      nodePort: 30428
+    - name: health
+      port: 8081
+      targetPort: health
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-edge
+  labels:
+    app.kubernetes.io/name: agent-edge
+    app.kubernetes.io/component: ingest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-edge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-edge
+        app.kubernetes.io/component: ingest
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.30.4-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: INGEST_SHARED_KEY_FILE
+              value: /opt/ekumetrics/secrets/ingest_shared_key
+            - name: AGENT_EDGE_ASSERTION_KEY_FILE
+              value: /opt/ekumetrics/secrets/agent_edge_assertion_key
+            - name: NGINX_ENVSUBST_FILTER
+              value: "^(INGEST_|AGENT_EDGE_)"
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+            - name: health
+              containerPort: 8081
+          volumeMounts:
+            - name: template
+              mountPath: /etc/nginx/templates/default.conf.template
+              subPath: default.conf.template
+              readOnly: true
+            - name: loader
+              mountPath: /docker-entrypoint.d/15-load-secrets.envsh
+              subPath: 15-load-secrets.envsh
+              readOnly: true
+            - name: secrets
+              mountPath: /opt/ekumetrics/secrets
+              readOnly: true
+            - name: tls
+              mountPath: /run/agent-tls
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: template
+          configMap:
+            name: agent-edge-template
+        - name: loader
+          configMap:
+            name: agent-edge-loader
+            defaultMode: 0555
+        - name: secrets
+          secret:
+            secretName: ekumetrics-secrets
+            defaultMode: 0444
+            items:
+              - key: ingest_shared_key
+                path: ingest_shared_key
+              - key: agent_edge_assertion_key
+                path: agent_edge_assertion_key
+        - name: tls
+          secret:
+            secretName: ekumetrics-agent-tls
+            defaultMode: 0440

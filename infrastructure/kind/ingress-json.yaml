@@ -1,0 +1,55 @@
+- op: replace
+  path: /spec
+  value:
+    ingressClassName: nginx
+    rules:
+      - host: ekumetrics.lvh.me
+        http:
+          paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: portal-web
+                  port:
+                    name: http
+      - host: api-ekumetrics.lvh.me
+        http:
+          paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: platform-api
+                  port:
+                    name: http
+      - host: auth-ekumetrics.lvh.me
+        http:
+          paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: keycloak
+                  port:
+                    name: http
+      - host: grafana-ekumetrics.lvh.me
+        http:
+          paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: grafana
+                  port:
+                    name: http
+      - host: ingest-ekumetrics.lvh.me
+        http:
+          paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: ingest-gateway
+                  port:
+                    name: http

@@ -1,0 +1,227 @@
+<section class="investigacion">
+  <eku-page-header
+    title="Investigación"
+    subtitle="Topología real del tenant. Pulse un nodo para destacar su relación; el detalle queda a la derecha."
+  >
+    <div ekuActions class="investigacion__actions">
+      <button type="button" class="investigacion__text-action" (click)="showTopology()">Mostrar todo</button>
+      <button
+        type="button"
+        class="investigacion__text-action"
+        (click)="clearCanvas()"
+        [disabled]="canvasNodes().length === 0"
+      >
+        Limpiar
+      </button>
+      <button type="button" class="eku-add" (click)="load()">Actualizar</button>
+    </div>
+    @if (error(); as message) {
+      <eku-error-state [message]="message" />
+    }
+  </eku-page-header>
+
+  @if (loading()) {
+    <eku-loading-skeleton label="Cargando investigación" [bars]="4" />
+  } @else {
+    <div class="investigacion__stage">
+      <aside class="investigacion__rail">
+        <form class="investigacion__filters" [formGroup]="filters">
+          <label class="eku-field">
+            <span>Sitio</span>
+            <select formControlName="siteId">
+              <option value="">Todos</option>
+              @for (site of siteOptions(); track site.id) {
+                <option [value]="site.id">{{ site.label }}</option>
+              }
+            </select>
+            <small></small>
+          </label>
+          <label class="eku-field">
+            <span>Buscar</span>
+            <input type="search" formControlName="query" placeholder="Equipo o tipo" />
+            <small></small>
+          </label>
+        </form>
+        <header class="investigacion__list-head">
+          <h2>Equipos</h2>
+          <span>{{ catalog().length }}</span>
+        </header>
+        @if (catalog().length === 0) {
+          <p class="investigacion__hint">
+            No hay vecinos LLDP en este sitio. El grafo se llena cuando Ekumetrics Agent reporte equipos reales.
+          </p>
+        } @else {
+          <ul class="investigacion__list">
+            @for (item of catalog(); track item.key) {
+              <li>
+                <button
+                  type="button"
+                  class="investigacion__row"
+                  [class.is-on]="item.key === pickedKey()"
+                  [class.is-in]="item.onCanvas"
+                  (click)="addFromCatalog(item.key)"
+                >
+                  <strong>{{ item.name }}</strong>
+                  <span>{{ item.kind }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+        <div class="investigacion__list-head">
+          <h2>Incidentes</h2>
+          <button type="button" class="investigacion__textbtn" (click)="correlate()" [disabled]="correlating()">
+            {{ correlating() ? 'Correlacionando…' : 'Correlacionar' }}
+          </button>
+        </div>
+        @if (incidents().length === 0) {
+          <p class="investigacion__hint">Sin incidentes. Investigue igual desde el grafo.</p>
+        } @else {
+          <ul class="investigacion__list investigacion__list--short">
+            @for (item of incidents(); track item.id) {
+              <li>
+                <button
+                  type="button"
+                  class="investigacion__row"
+                  [class.is-on]="item.id === selected()?.id"
+                  (click)="selectIncident(item)"
+                >
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.alertCount }} alertas · {{ confidence(item.confidence) }}@if (priorityOf(item); as level) { · {{ level }} }</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </aside>
+
+      <div class="investigacion__canvas">
+        @if (canvasNodes().length === 0) {
+          <eku-empty-state
+            title="Grafo vacío"
+            message="No hay topología LLDP todavía. Cuando Ekumetrics Agent reporte vecinos, aparecerán aquí."
+          />
+        } @else {
+          <eku-cy-graph
+            [nodes]="canvasNodes()"
+            [edges]="canvasEdges()"
+            [selectedKey]="pickedKey()"
+            [rootKey]="layoutRoot()"
+            (nodeSelected)="pickNode($event)"
+            (nodeExpand)="expandNode($event)"
+          />
+          <ul class="investigacion__legend" aria-label="Leyenda">
+            <li><i data-kind="switch"></i> Switch</li>
+            <li><i data-kind="host"></i> Host</li>
+            <li><i data-kind="service"></i> Servicio</li>
+            <li><i data-kind="database"></i> Base de datos</li>
+          </ul>
+        }
+      </div>
+
+      <aside class="investigacion__inspect">
+        @if (inspector(); as detail) {
+          <header>
+            <h2>{{ detail.node.name }}</h2>
+            <p>
+              <span class="investigacion__chip" [attr.data-role]="detail.role">{{ detail.roleLabel }}</span>
+              {{ detail.node.kind }} · {{ detail.siteLabel }}
+            </p>
+          </header>
+          <p class="investigacion__why">{{ detail.implication }}</p>
+          <button
+            type="button"
+            class="eku-add"
+            (click)="expandNode(detail.node.key)"
+            [disabled]="detail.pending === 0"
+          >
+            {{ detail.pending === 0 ? 'Vecindario completo' : 'Añadir vecinos' }}
+          </button>
+          <dl>
+            <div>
+              <dt>Clave</dt>
+              <dd>{{ detail.node.key }}</dd>
+            </div>
+            <div>
+              <dt>Fuente</dt>
+              <dd>{{ detail.node.source || '—' }}</dd>
+            </div>
+            <div>
+              <dt>Saltos a la causa</dt>
+              <dd>
+                @if (detail.hopsFromCause == null) {
+                  —
+                } @else if (detail.hopsFromCause === 0) {
+                  Causa
+                } @else {
+                  {{ detail.hopsFromCause }}
+                }
+              </dd>
+            </div>
+            <div>
+              <dt>Alcance</dt>
+              <dd>{{ detail.reachCount }} equipos</dd>
+            </div>
+            @if (detail.node.lastSeenAt) {
+              <div>
+                <dt>Visto</dt>
+                <dd>{{ detail.node.lastSeenAt | date: 'short' }}</dd>
+              </div>
+            }
+          </dl>
+          <h3>Camino</h3>
+          @if (detail.pathNodes.length) {
+            <ol class="investigacion__path">
+              @for (step of detail.pathNodes; track step.key) {
+                <li>
+                  <button type="button" class="investigacion__link" (click)="addFromCatalog(step.key)">
+                    {{ step.name }}
+                  </button>
+                </li>
+              }
+            </ol>
+          } @else {
+            <p>Sin causa de incidente. Siga por vecinos.</p>
+          }
+          <h3>Vecinos</h3>
+          @if (detail.neighbors.length) {
+            <ul class="investigacion__neighbors">
+              @for (neighbor of detail.neighbors; track neighbor.key) {
+                <li>
+                  <button type="button" class="investigacion__nudge" (click)="addFromCatalog(neighbor.key)">
+                    <strong>{{ neighbor.name }}</strong>
+                    <span>{{ neighbor.onCanvas ? neighbor.kind : 'añadir' }}</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p>Sin vecinos persistidos.</p>
+          }
+          <h3>Alertas</h3>
+          @if (detail.relatedAlerts.length) {
+            <ul>
+              @for (alert of detail.relatedAlerts; track alert.fingerprint) {
+                <li>{{ alert.name }} · {{ alert.severity }}</li>
+              }
+            </ul>
+          } @else {
+            <p>Ninguna alerta apunta a este nodo.</p>
+          }
+          @if (selected(); as incident) {
+            <app-incident-enrichment-panel
+              [incidentId]="incident.id"
+              [enrichment]="incident.enrichment ?? null"
+              (feedbackApplied)="onEnrichmentFeedback($event)"
+            />
+          }
+        } @else {
+          <eku-empty-state
+            title="Sin selección"
+            message="Pulse un nodo del grafo. El detalle aparece aquí."
+          />
+        }
+      </aside>
+    </div>
+  }
+</section>

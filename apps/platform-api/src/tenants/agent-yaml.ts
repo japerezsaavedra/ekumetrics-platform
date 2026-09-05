@@ -1,4 +1,6 @@
-const TEMPLATE = `# Ekumetrics Agent — un proceso, un YAML.
+import { parseStoredModules, type OptionalTenantModule } from './tenant-modules';
+
+const CORE = `# Ekumetrics Agent — un proceso, un YAML.
 # Active solo lo que vaya a recolectar. Guía: docs/USO.md  Rol: docs/ROL.md
 
 agent:
@@ -69,31 +71,51 @@ modules:
     enabled: false
     interval: 5s
     targets: []
+`;
 
+const OPTIONAL_BLOCKS: Record<OptionalTenantModule, string> = {
+  network: `
 snmp:
   enabled: false
   devices: []
-
+`,
+  databases: `
 databases:
   enabled: false
   targets: []
-
+`,
+  queues: `
 queues:
   enabled: false
   targets: []
-
+`,
+  icewarp: `
 icewarp:
   enabled: false
   targets: []
-`;
+`,
+  sap: `
+sap:
+  enabled: false
+  targets: []
+`,
+};
 
 export function buildAgentYaml(input: {
   tenantId: string;
   site: string;
   agentId: string;
   mode: string;
+  modules?: unknown;
 }): string {
-  return TEMPLATE.replaceAll('__SITE__', input.site)
+  const enabled = parseStoredModules(input.modules);
+  const extras = enabled
+    .map((id) => OPTIONAL_BLOCKS[id].trimEnd())
+    .filter(Boolean)
+    .join('\n');
+  const yaml = extras ? `${CORE.trimEnd()}\n${extras}\n` : `${CORE.trimEnd()}\n`;
+  return yaml
+    .replaceAll('__SITE__', input.site)
     .replaceAll('__TENANT__', input.tenantId)
     .replaceAll('__AGENT_ID__', input.agentId)
     .replaceAll('__MODE__', input.mode);

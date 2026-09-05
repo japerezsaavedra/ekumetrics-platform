@@ -31,4 +31,19 @@ describe('MetricsService', () => {
     expect(output).toContain('ekumetrics_agents_total 4');
     expect(output).toContain('ekumetrics_agents_fresh{window="5m"} 3');
   });
+
+  it('incluye series de módulos registrados (correlación AIOps)', async () => {
+    const prisma = {
+      agent: { count: jest.fn().mockResolvedValue(0) },
+      agentEvent: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const service = new MetricsService(prisma as never);
+    service.registerContributor(
+      'aiops-correlation',
+      () =>
+        '# TYPE aiops_correlations_total counter\naiops_correlations_total{outcome="empty"} 1\n',
+    );
+    const output = await service.render();
+    expect(output).toContain('aiops_correlations_total{outcome="empty"} 1');
+  });
 });

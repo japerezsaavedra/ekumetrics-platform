@@ -4,7 +4,7 @@
     subtitle="Un caso correlacionado, no una lista de alertas. La causa sale del grafo y de la ventana temporal."
   >
     <div ekuActions class="incidents__actions">
-      <button type="button" class="eku-add" (click)="load()">Actualizar</button>
+      <button type="button" class="incidents__text-action" (click)="load()">Actualizar</button>
       <button type="button" class="eku-add" (click)="correlate()" [disabled]="correlating()">
         {{ correlating() ? 'Correlacionando…' : 'Correlacionar' }}
       </button>
@@ -12,7 +12,7 @@
     @if (error(); as message) {
       <eku-error-state [message]="message" />
     } @else if (!loading()) {
-      <p>{{ openCount() }} abiertos · {{ items().length }} en total</p>
+      <p class="incidents__tally">{{ openCount() }} abiertos · {{ items().length }} en total</p>
     }
   </eku-page-header>
 
@@ -20,6 +20,7 @@
     <eku-loading-skeleton label="Cargando incidentes" [bars]="4" />
   } @else if (items().length === 0) {
     <eku-empty-state
+      title="Sin incidentes"
       message="No hay incidentes. Correlacione las alertas activas cuando el grafo ya tenga vecinos LLDP."
     />
   } @else {
@@ -34,7 +35,7 @@
               (click)="select(item)"
             >
               <strong>{{ item.title }}</strong>
-              <span>{{ item.alertCount }} alertas · {{ item.severity }}</span>
+              <span>{{ item.alertCount }} alertas · {{ item.severity }}@if (priorityOf(item); as level) { · {{ level }} }</span>
             </button>
           </li>
         }
@@ -85,6 +86,11 @@
               <li>Sin vecinos persistidos.</li>
             }
           </ul>
+          <app-incident-enrichment-panel
+            [incidentId]="incident.id"
+            [enrichment]="incident.enrichment ?? null"
+            (feedbackApplied)="onEnrichmentFeedback($event)"
+          />
         </article>
       }
     </div>

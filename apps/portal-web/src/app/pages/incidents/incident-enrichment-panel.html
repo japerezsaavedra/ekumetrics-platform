@@ -1,0 +1,261 @@
+<section class="enrichment">
+  @if (!enrichment()) {
+    <p class="enrichment__empty">Sin enriquecimiento RCA. El incidente correlacionado sigue disponible.</p>
+  } @else {
+    @let data = enrichment()!;
+    <header class="enrichment__head">
+      <h3>Enriquecimiento</h3>
+      @if (data.computedPriority?.level) {
+        <span class="enrichment__prio">{{ data.computedPriority?.level }}</span>
+      }
+    </header>
+    <dl>
+      <div>
+        <dt>Causa raíz</dt>
+        <dd>{{ data.primaryRootCause?.hypothesis || 'Sin RCA determinista todavía' }}</dd>
+      </div>
+      <div>
+        <dt>Confianza</dt>
+        <dd>{{ rcaPercent(data.rcaConfidence ?? data.primaryRootCause?.confidence ?? null) }}</dd>
+      </div>
+      <div>
+        <dt>Algoritmo</dt>
+        <dd>{{ data.primaryRootCause?.algorithm || data.algorithm }}</dd>
+      </div>
+      <div>
+        <dt>Modo</dt>
+        <dd>{{ rcaModeLabel(data) }}</dd>
+      </div>
+      <div>
+        <dt>Radio de impacto</dt>
+        <dd>
+          @if (data.blastRadius; as blast) {
+            {{ blast.entityCount }} entidades · {{ blast.hops }} saltos
+          } @else {
+            —
+          }
+        </dd>
+      </div>
+    </dl>
+
+    <h4>RCA determinista</h4>
+    <p class="enrichment__empty">
+      Motor RcaEngine (scoring ponderado). No es investigación con IA.
+    </p>
+    @if (data.rootCauseCandidates?.length) {
+      <ul>
+        @for (item of data.rootCauseCandidates; track item.id) {
+          <li>
+            {{ item.rank }}. {{ item.hypothesis }}
+            · {{ rcaPercent(item.confidence) }}
+            · {{ item.algorithm }}
+            · {{ item.status }}
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="enrichment__empty">Sin candidatos de RCA.</p>
+    }
+
+    <h4>Evidencia</h4>
+    @if (data.primaryRootCause?.evidence?.length) {
+      <ul>
+        @for (item of data.primaryRootCause?.evidence ?? []; track item.statement) {
+          <li>{{ item.statement }} · {{ item.algorithm }}</li>
+        }
+      </ul>
+    } @else if (data.correlationEvidence?.length) {
+      <ul>
+        @for (item of data.correlationEvidence; track item.statement) {
+          <li>{{ item.statement }}</li>
+        }
+      </ul>
+    } @else {
+      <p class="enrichment__empty">Sin evidencia adicional.</p>
+    }
+
+    <h4>Anomalías</h4>
+    @if (data.anomalies?.length) {
+      <ul>
+        @for (item of data.anomalies; track item.id) {
+          <li>
+            {{ item.summary }} · {{ item.kind }}
+            @if (item.algorithm) {
+              · {{ item.algorithm }}
+            }
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="enrichment__empty">Sin anomalías clasificadas.</p>
+    }
+
+    <h4>Línea de tiempo</h4>
+    @if (data.timeline?.length) {
+      <ol class="enrichment__time">
+        @for (item of data.timeline; track item.sequence) {
+          <li>
+            <time>{{ item.occurredAt | date: 'HH:mm:ss' }}</time>
+            {{ item.summary }}
+          </li>
+        }
+      </ol>
+    } @else {
+      <p class="enrichment__empty">Sin línea de tiempo todavía.</p>
+    }
+
+    <h4>Coincidencias históricas</h4>
+    @if (data.historicalMatches?.length) {
+      <ul>
+        @for (item of data.historicalMatches; track item.incidentId) {
+          <li>{{ item.title }} · {{ rcaPercent(item.score) }} · {{ item.algorithm }}</li>
+        }
+      </ul>
+    } @else {
+      <p class="enrichment__empty">Sin coincidencias históricas del tenant.</p>
+    }
+
+    <section class="enrichment__ai" aria-label="Investigación IA">
+      <h4>Investigación IA</h4>
+      <p class="enrichment__empty">
+        AIOps Agents de la plataforma. Holmes no orquesta este flujo.
+      </p>
+      @if (investigation(); as inv) {
+        <dl>
+          <div>
+            <dt>Estado</dt>
+            <dd>{{ investigationStatusLabel(inv.productStatus || inv.status) }}</dd>
+          </div>
+          <div>
+            <dt>Duración</dt>
+            <dd>{{ durationLabel() }}</dd>
+          </div>
+        </dl>
+        <h4>Agentes</h4>
+        <ul class="enrichment__agents">
+          @for (item of findings(); track item.id) {
+            <li>
+              <span class="enrichment__agent">{{ agentTypeLabel(item.agentType) }}</span>
+              · {{ item.status }}
+              @if (item.skipReason) {
+                — {{ item.skipReason }}
+              }
+              @if (item.summary) {
+                · {{ item.summary }}
+              }
+            </li>
+          } @empty {
+            <li>Sin findings todavía.</li>
+          }
+        </ul>
+        @if (inv.investigationResult; as result) {
+          <h4>Causa probable</h4>
+          <p>{{ result.probableRootCause }}</p>
+          <dl>
+            <div>
+              <dt>Confianza</dt>
+              <dd>{{ rcaPercent(result.confidence) }}</dd>
+            </div>
+            @if (result.provider) {
+              <div>
+                <dt>Síntesis</dt>
+                <dd>{{ result.provider }}{{ result.model ? ' / ' + result.model : '' }}</dd>
+              </div>
+            }
+          </dl>
+          <h4>Evidencia de apoyo</h4>
+          @if (result.supportingEvidence?.length) {
+            <ul>
+              @for (item of result.supportingEvidence; track item) {
+                <li>{{ item }}</li>
+              }
+            </ul>
+          } @else {
+            <p class="enrichment__empty">Sin evidencia adicional de síntesis.</p>
+          }
+          <h4>Evidencia contradictoria</h4>
+          @if (result.contradictingEvidence?.length) {
+            <ul>
+              @for (item of result.contradictingEvidence; track item) {
+                <li>{{ item }}</li>
+              }
+            </ul>
+          } @else {
+            <p class="enrichment__empty">Ninguna significativa.</p>
+          }
+          <h4>Recomendaciones</h4>
+          @if (result.recommendedActions?.length) {
+            <ul>
+              @for (item of result.recommendedActions; track item.type) {
+                <li>{{ item.description }}</li>
+              }
+            </ul>
+          } @else {
+            <p class="enrichment__empty">Sin recomendaciones.</p>
+          }
+        }
+      } @else {
+        <p class="enrichment__empty">No ejecutada.</p>
+      }
+      @if (investigateError(); as message) {
+        <p class="enrichment__empty">{{ message }}</p>
+      }
+      <button
+        type="button"
+        class="eku-add"
+        [disabled]="investigating()"
+        (click)="investigate(!!investigation())"
+      >
+        {{ investigating() ? 'Investigando…' : investigation() ? 'Reintentar' : 'Investigar' }}
+      </button>
+    </section>
+
+    @if (feedbackAvailable()) {
+      <form class="enrichment__form" [formGroup]="feedbackForm" (ngSubmit)="submitFeedback()">
+        <h4>Feedback RCA</h4>
+        <label class="eku-field">
+          <span>Acción</span>
+          <select formControlName="action">
+            <option value="CONFIRM">Confirmar causa</option>
+            <option value="REJECT">Rechazar</option>
+            <option value="SELECT_ALTERNATIVE">Seleccionar alternativa</option>
+            <option value="ADD_NOTE">Añadir nota</option>
+          </select>
+          <small></small>
+        </label>
+        <label class="eku-field">
+          <span>Candidato</span>
+          <select formControlName="candidateId">
+            <option value="">Causa primaria</option>
+            @for (item of data.rootCauseCandidates ?? []; track item.id) {
+              <option [value]="item.id">{{ item.rank }}. {{ item.hypothesis }}</option>
+            }
+          </select>
+          <small>
+            @if (
+              feedbackForm.controls.candidateId.invalid &&
+              feedbackForm.controls.candidateId.touched
+            ) {
+              Seleccione una alternativa.
+            }
+          </small>
+        </label>
+        <label class="eku-field">
+          <span>Nota</span>
+          <textarea formControlName="note" rows="2" maxlength="500"></textarea>
+          <small>
+            @if (feedbackForm.controls.note.invalid && feedbackForm.controls.note.touched) {
+              La nota no puede superar 500 caracteres.
+            }
+          </small>
+        </label>
+        @if (feedbackError(); as message) {
+          <p class="enrichment__empty">{{ message }}</p>
+        }
+        <button type="submit" class="eku-add" [disabled]="sending() || feedbackForm.invalid">
+          {{ sending() ? 'Enviando…' : 'Registrar' }}
+        </button>
+      </form>
+    }
+  }
+</section>

@@ -1,13 +1,5 @@
+import { GRAPH_EXAMPLE_EDGES as edges } from './graph-example';
 import { commonCover, sharePath, walk } from './graph-walk';
-
-const edges = [
-  { fromKey: 'sw-core', toKey: 'app-01' },
-  { fromKey: 'sw-core', toKey: 'app-02' },
-  { fromKey: 'sw-core', toKey: 'db-01' },
-  { fromKey: 'app-01', toKey: 'api-pagos' },
-  { fromKey: 'app-02', toKey: 'sap' },
-  { fromKey: 'db-01', toKey: 'postgres' },
-];
 
 describe('graph-walk', () => {
   it('alcanza el impacto de un switch en tres hops', () => {

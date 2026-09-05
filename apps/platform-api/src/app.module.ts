@@ -9,13 +9,19 @@ import { HealthModule } from './health/health.module';
 import { IngestModule } from './ingest/ingest.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { AnomalyModule } from './aiops/anomaly/anomaly.module';
+import { AiopsDomainModule } from './aiops/aiops-domain.module';
+import { HistoricalModule } from './aiops/historical/historical.module';
 import { IncidentsModule } from './aiops/incidents.module';
+import { InvestigationModule } from './aiops/investigation/investigation.module';
+import { MessagingModule } from './messaging/messaging.module';
 import { TenantsModule } from './tenants/tenants.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    MessagingModule,
     AuthModule,
     HealthModule,
     IngestModule,
@@ -26,6 +32,10 @@ import { TenantsModule } from './tenants/tenants.module';
     AiModule,
     AlertmanagerModule,
     IncidentsModule,
+    InvestigationModule,
+    AiopsDomainModule,
+    AnomalyModule,
+    HistoricalModule,
   ],
 })
 export class AppModule {}

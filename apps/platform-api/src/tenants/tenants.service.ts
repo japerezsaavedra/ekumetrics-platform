@@ -7,6 +7,7 @@ import {
 import { KeycloakAdminService } from '../auth/keycloak-admin';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildAgentYaml } from './agent-yaml';
+import { normalizeTenantModules } from './tenant-modules';
 
 const OPERATOR_SLUG = 'default';
 
@@ -45,6 +46,7 @@ export class TenantsService {
     emailDomainInput?: string,
     siteNameInput?: string,
     siteSlugInput?: string,
+    modulesInput?: unknown,
   ) {
     this.assertOperator(operatorSlug);
     const name = (nameInput ?? '').trim();
@@ -75,11 +77,13 @@ export class TenantsService {
     if (exists) {
       throw new ConflictException(`Ya existe el tenant ${slug}.`);
     }
+    const modules = normalizeTenantModules(modulesInput);
     const tenant = await this.prisma.tenant.create({
       data: {
         name,
         slug,
         emailDomain,
+        modules,
         users: {
           create: {
             email: adminEmail,
@@ -365,7 +369,13 @@ export class TenantsService {
     return agents.map((agent) => ({
       ...agent,
       tenantSlug: tenant.slug,
-      yaml: this.yamlFor(tenant.slug, agent.siteId, agent.agentId, agent.mode),
+      yaml: this.yamlFor(
+        tenant.slug,
+        agent.siteId,
+        agent.agentId,
+        agent.mode,
+        tenant.modules,
+      ),
     }));
   }
 
@@ -405,7 +415,7 @@ export class TenantsService {
     return {
       ...agent,
       tenantSlug: tenant.slug,
-      yaml: this.yamlFor(tenant.slug, siteId, agentId, mode),
+      yaml: this.yamlFor(tenant.slug, siteId, agentId, mode, tenant.modules),
     };
   }
 
@@ -440,7 +450,13 @@ export class TenantsService {
     return {
       ...updated,
       tenantSlug: tenant.slug,
-      yaml: this.yamlFor(tenant.slug, siteId, updated.agentId, mode),
+      yaml: this.yamlFor(
+        tenant.slug,
+        siteId,
+        updated.agentId,
+        mode,
+        tenant.modules,
+      ),
     };
   }
 
@@ -461,6 +477,7 @@ export class TenantsService {
     slugInput?: string,
     nameInput?: string,
     emailDomainInput?: string,
+    modulesInput?: unknown,
   ) {
     this.assertOperator(operatorSlug);
     const tenant = await this.requireTenant(slugInput);
@@ -471,7 +488,13 @@ export class TenantsService {
     }
     return this.prisma.tenant.update({
       where: { id: tenant.id },
-      data: { name, emailDomain },
+      data: {
+        name,
+        emailDomain,
+        ...(modulesInput === undefined
+          ? {}
+          : { modules: normalizeTenantModules(modulesInput) }),
+      },
       include: {
         users: { where: { role: 'admin' } },
         sites: true,
@@ -626,8 +649,9 @@ export class TenantsService {
     site: string,
     agentId: string,
     mode: string,
+    modules?: unknown,
   ) {
-    return buildAgentYaml({ tenantId, site, agentId, mode });
+    return buildAgentYaml({ tenantId, site, agentId, mode, modules });
   }
 
   private slugify(value?: string) {

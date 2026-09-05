@@ -2,9 +2,11 @@
 
 ## Unreleased
 
+- Añade investigación AIOps Wave 3 (`AgentOrchestratorService`, AIOps Agents, panel en `/incidentes`) con política MANUAL por defecto.
 - Añade entrega productiva de secretos mediante archivos montados, validación de permisos/longitud y rechazo de secretos inline.
 - Añade borde Agent mTLS para OTLP gRPC/HTTP, elimina la publicación directa del Collector/gateway en producción y vincula `O/OU/CN` del certificado con tenant/sitio/agente.
 - Protege la afirmación del certificado con una clave privada borde→API y añade una prueba real que rechaza clientes sin certificado.
+- E-Platform muestra el Kubernetes monitoreado: nodos, pods y cargas del namespace, con kube-state-metrics v2.20.0.
 
 Registro de cambios de Ekumetrics Platform. El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/). El versionado es [SemVer](https://semver.org/lang/es/).
 

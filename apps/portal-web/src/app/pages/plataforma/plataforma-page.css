@@ -2,6 +2,48 @@
   width: 100%;
 }
 
+.plataforma__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--eku-space-2);
+}
+
+.plataforma__actions .eku-add {
+  min-width: 7.5rem;
+}
+
+.plataforma__text-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0 0.75rem;
+  color: var(--eku-primary);
+  font: inherit;
+  text-decoration: none;
+}
+
+.plataforma__text-action:hover {
+  background: var(--eku-primary-muted);
+}
+
+.plataforma__band-head {
+  display: flex;
+  align-items: baseline;
+  margin: var(--eku-space-5) 0 var(--eku-space-3);
+}
+
+.plataforma__band-head:first-of-type {
+  margin-top: 0;
+}
+
+.plataforma__band-head h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
 .plataforma__hostbar {
   display: grid;
   gap: var(--eku-space-3);
@@ -36,6 +78,7 @@
   overflow: hidden;
   color: var(--eku-text-primary);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -92,6 +135,7 @@
 .plataforma__kpi strong {
   font-size: 2rem;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
@@ -220,7 +264,6 @@
 
 .plataforma__svc.is-up .plataforma__svc-state::before {
   background: var(--eku-healthy);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--eku-healthy) 22%, transparent);
 }
 
 .plataforma__svc.is-down {
@@ -234,7 +277,6 @@
 
 .plataforma__svc.is-down .plataforma__svc-state::before {
   background: var(--eku-critical);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--eku-critical) 22%, transparent);
 }
 
 .plataforma__charts {
@@ -278,6 +320,206 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--eku-space-4);
+}
+
+.plataforma__split--cluster {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0 0 var(--eku-space-4);
+}
+
+.plataforma__span {
+  margin: var(--eku-space-3) 0 0;
+  padding: var(--eku-space-3);
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface);
+}
+
+.plataforma__span header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--eku-space-2);
+  margin: 0 0 var(--eku-space-2);
+}
+
+.plataforma__span header strong {
+  font-size: 0.9rem;
+}
+
+.plataforma__span-event {
+  margin: 0.35rem 0 0;
+  color: var(--eku-text-secondary);
+  font-size: 0.78rem;
+}
+
+.plataforma__span--selected {
+  margin-top: var(--eku-space-3);
+}
+
+.plataforma__trace-view {
+  margin-top: var(--eku-space-4);
+  padding: var(--eku-space-4);
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface);
+}
+
+.plataforma__log-detail .plataforma__trace-view {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.plataforma__trace-view-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--eku-space-3);
+  margin: 0 0 var(--eku-space-3);
+}
+
+.plataforma__trace-view-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.plataforma__trace-view-head p {
+  margin: 0.25rem 0 0;
+  color: var(--eku-text-secondary);
+  font-size: 0.78rem;
+  word-break: break-word;
+}
+
+.plataforma__gantt-axis,
+.plataforma__gantt-row {
+  display: grid;
+  grid-template-columns: minmax(11rem, 16rem) 6.2rem minmax(0, 1fr);
+  align-items: center;
+  width: 100%;
+  column-gap: 0.5rem;
+}
+
+.plataforma__gantt-axis {
+  margin: 0 0 0.4rem;
+  color: var(--eku-text-secondary);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.plataforma__gantt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.plataforma__gantt-row {
+  padding: 0.1rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  appearance: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.plataforma__gantt-row:hover {
+  background: color-mix(in srgb, var(--eku-primary) 6%, transparent);
+}
+
+.plataforma__gantt-row.is-selected {
+  background: color-mix(in srgb, var(--eku-primary) 12%, transparent);
+}
+
+.plataforma__gantt-label {
+  overflow: hidden;
+  min-width: 0;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plataforma__gantt-ms {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  color: var(--eku-text-secondary);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.plataforma__gantt-ms b {
+  color: var(--eku-text-primary);
+  font-weight: 650;
+}
+
+.plataforma__gantt-ms small {
+  font-size: 0.65rem;
+  font-weight: 400;
+}
+
+.plataforma__gantt-track {
+  position: relative;
+  height: 1.05rem;
+  min-width: 0;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--eku-border) 45%, var(--eku-surface));
+}
+
+.plataforma__gantt-track--axis {
+  height: 1rem;
+  background: transparent;
+}
+
+.plataforma__gantt-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.plataforma__gantt-tick:first-child {
+  transform: none;
+}
+
+.plataforma__gantt-tick:last-child {
+  transform: translateX(-100%);
+}
+
+.plataforma__gantt-bar {
+  position: absolute;
+  top: 2px;
+  height: calc(100% - 4px);
+  min-width: 2px;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--eku-primary) 72%, black);
+}
+
+.plataforma__gantt-bar.is-error,
+.plataforma__gantt-row.is-error .plataforma__gantt-bar {
+  background: color-mix(in srgb, var(--eku-critical) 78%, black);
+}
+
+.plataforma__gantt-mark {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: var(--eku-text-primary);
+  opacity: 0.5;
+}
+
+.plataforma__issues {
+  margin: 0 0 var(--eku-space-4);
+  padding: var(--eku-space-4);
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface);
 }
 
 .plataforma__section-head {
@@ -470,7 +712,8 @@
   }
 
   .plataforma__kpis,
-  .plataforma__charts {
+  .plataforma__charts,
+  .plataforma__split--cluster {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -483,7 +726,8 @@
   .plataforma__facts,
   .plataforma__services,
   .plataforma__kpis,
-  .plataforma__charts {
+  .plataforma__charts,
+  .plataforma__split--cluster {
     grid-template-columns: 1fr;
   }
 }

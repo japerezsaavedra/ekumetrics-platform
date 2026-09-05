@@ -1,0 +1,45 @@
+export const TOPOLOGY_RELATIONS = {
+  RUNS_ON: 'RUNS_ON',
+  DEPENDS_ON: 'DEPENDS_ON',
+  CONNECTS_TO: 'CONNECTS_TO',
+  HOSTS: 'HOSTS',
+  USES: 'USES',
+  MEMBER_OF: 'MEMBER_OF',
+  ROUTES_THROUGH: 'ROUTES_THROUGH',
+  STORES_IN: 'STORES_IN',
+  EXPOSES: 'EXPOSES',
+  BACKED_BY: 'BACKED_BY',
+  COMMUNICATES_WITH: 'COMMUNICATES_WITH',
+} as const;
+
+export type TopologyRelation =
+  (typeof TOPOLOGY_RELATIONS)[keyof typeof TOPOLOGY_RELATIONS];
+
+/** Outgoing from the dependent entity (A DEPENDS_ON B). */
+export const TOPOLOGY_DEPENDENCY_RELATIONS = [
+  TOPOLOGY_RELATIONS.DEPENDS_ON,
+  TOPOLOGY_RELATIONS.USES,
+  TOPOLOGY_RELATIONS.RUNS_ON,
+  TOPOLOGY_RELATIONS.STORES_IN,
+  TOPOLOGY_RELATIONS.BACKED_BY,
+  TOPOLOGY_RELATIONS.ROUTES_THROUGH,
+  TOPOLOGY_RELATIONS.MEMBER_OF,
+] as const;
+
+/** Outgoing from the host/container (A HOSTS B). Inverse of RUNS_ON. */
+export const TOPOLOGY_HOSTING_RELATIONS = [
+  TOPOLOGY_RELATIONS.HOSTS,
+  TOPOLOGY_RELATIONS.EXPOSES,
+] as const;
+
+/** L2/L7 adjacency: treated as undirected (LLDP/CDP uses CONNECTS_TO). */
+export const TOPOLOGY_UNDIRECTED_RELATIONS = [
+  TOPOLOGY_RELATIONS.CONNECTS_TO,
+  TOPOLOGY_RELATIONS.COMMUNICATES_WITH,
+] as const;
+
+export const TOPOLOGY_DEFAULT_HOPS = 8;
+
+export function isTopologyRelation(value: string): value is TopologyRelation {
+  return (Object.values(TOPOLOGY_RELATIONS) as string[]).includes(value);
+}

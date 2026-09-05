@@ -15,6 +15,11 @@ import { EkuEmptyStateComponent } from '../../shared/eku/empty-state/eku-empty-s
 import { EkuErrorStateComponent } from '../../shared/eku/error-state/eku-error-state';
 import { EkuLoadingSkeletonComponent } from '../../shared/eku/loading-skeleton/eku-loading-skeleton';
 import { EkuPageHeaderComponent } from '../../shared/eku/page-header/eku-page-header';
+import { IncidentEnrichmentPanel } from './incident-enrichment-panel';
+import {
+  enrichmentPriority,
+  type IncidentEnrichmentDto,
+} from './incident-enrichment.view';
 
 type IncidentMember = {
   alerts?: { fingerprint: string; name: string; severity: string }[];
@@ -35,6 +40,7 @@ type ManagedIncident = {
   windowStart: string | null;
   windowEnd: string | null;
   members: IncidentMember | null;
+  enrichment?: IncidentEnrichmentDto | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -47,6 +53,7 @@ type ManagedIncident = {
     EkuErrorStateComponent,
     EkuLoadingSkeletonComponent,
     EkuPageHeaderComponent,
+    IncidentEnrichmentPanel,
   ],
   templateUrl: './incidents-page.html',
   styleUrl: './incidents-page.css',
@@ -118,5 +125,17 @@ export class IncidentsPage {
   protected confidence(value: number | null): string {
     if (value == null) return 'Sin causa en el grafo';
     return `${Math.round(value * 100)} %`;
+  }
+
+  protected priorityOf(item: ManagedIncident): string | null {
+    return enrichmentPriority(item.enrichment);
+  }
+
+  protected onEnrichmentFeedback(row: IncidentEnrichmentDto): void {
+    this.items.update((current) =>
+      current.map((item) =>
+        item.id === this.selectedId() ? { ...item, enrichment: row } : item,
+      ),
+    );
   }
 }

@@ -2,6 +2,11 @@ jest.mock('../src/prisma/prisma.service', () => ({
   PrismaService: class PrismaService {
     $queryRaw = jest.fn().mockResolvedValue([{ '?column?': 1 }]);
     $disconnect = jest.fn();
+    aiopsEventOutbox = {
+      findMany: jest.fn().mockResolvedValue([]),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      createMany: jest.fn().mockResolvedValue({ count: 0 }),
+    };
   },
 }));
 jest.mock('../src/auth/auth.service', () => ({

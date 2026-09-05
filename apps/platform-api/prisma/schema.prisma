@@ -13,6 +13,7 @@ model Tenant {
   slug        String   @unique
   name        String
   emailDomain String?
+  modules     String[] @default([])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -34,6 +35,17 @@ model Tenant {
   thresholds         PlatformThresholds[]
   graphNodes         GraphNode[]
   graphEdges         GraphEdge[]
+  aiopsInvestigations AiopsInvestigation[]
+  agentFindings       AgentFinding[]
+  aiopsAnomalies         AiopsAnomaly[]
+  aiopsAnomalyPolicies   AiopsAnomalyPolicy[]
+  incidentEnrichments    IncidentEnrichment[]
+  incidentSignatures     IncidentSignature[]
+  resolutionRecords      ResolutionRecord[]
+  rcaFeedbacks           RcaFeedback[]
+  rcaScoringPolicies     RcaScoringPolicy[]
+  aiopsEventOutbox       AiopsEventOutbox[]
+  aiopsInvestigationPolicies AiopsInvestigationPolicy[]
 }
 
 model Site {
@@ -147,30 +159,42 @@ model Asset {
 }
 
 model AgentEvent {
-  id          String   @id @default(cuid())
-  fingerprint String   @unique
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  agentId     String
-  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  siteId      String
-  assetKey    String?
-  assetType   String?
-  vendor      String?
-  tier        Int?
-  signal      String
-  value       Float
-  unit        String?
-  severity    String?
-  source      String
-  tags        Json?
-  eventAt     DateTime
-  receivedAt  DateTime @default(now())
+  id             String   @id @default(cuid())
+  fingerprint    String   @unique
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId        String
+  agent          Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  siteId         String
+  assetKey       String?
+  assetType      String?
+  vendor         String?
+  tier           Int?
+  signal         String
+  value          Float
+  unit           String?
+  severity       String?
+  source         String
+  tags           Json?
+  category       String?
+  entityType     String?
+  correlationKey String?
+  environment    String?
+  traceId        String?
+  metadata       Json?
+  eventAt        DateTime
+  receivedAt     DateTime @default(now())
 
   @@index([tenantId, eventAt])
   @@index([agentId, eventAt])
   @@index([signal, eventAt])
   @@index([assetKey, eventAt])
+  @@index([tenantId, category, eventAt])
+  @@index([tenantId, entityType, eventAt])
+  @@index([tenantId, severity, eventAt])
+  @@index([tenantId, correlationKey, eventAt])
+  @@index([tenantId, environment, eventAt])
+  @@index([tenantId, traceId])
 }
 
 model Policy {
@@ -211,6 +235,11 @@ model Incident {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
+  enrichment        IncidentEnrichment?
+  anomalies         AiopsAnomaly[]
+  resolutionRecords ResolutionRecord[]
+  rcaFeedbacks      RcaFeedback[]
+
   @@index([tenantId, clusterKey])
   @@index([tenantId])
   @@index([status])
@@ -234,6 +263,7 @@ model GraphNode {
   @@unique([tenantId, nodeKey])
   @@index([tenantId, siteId])
   @@index([tenantId, lastSeenAt])
+  @@index([tenantId, kind])
 }
 
 model GraphEdge {
@@ -245,6 +275,7 @@ model GraphEdge {
   toKey      String
   relation   String
   source     String
+  confidence Float?
   lastSeenAt DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -253,6 +284,7 @@ model GraphEdge {
   @@index([tenantId, siteId])
   @@index([tenantId, fromKey])
   @@index([tenantId, toKey])
+  @@index([tenantId, relation])
 }
 
 model AuditLog {
@@ -430,6 +462,8 @@ model PlatformThresholds {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  anomalyPolicies AiopsAnomalyPolicy[]
+
   @@index([tenantId])
 }
 
@@ -438,4 +472,331 @@ enum IncidentStatus {
   acknowledged
   resolved
   closed
+}
+
+// --- AIOps domain foundation (wave 1) ---
+// New models only. Incident.status stays open|acknowledged|resolved|closed.
+// AIOps lifecycle lives on AiopsInvestigation.incidentLifecycle (optional).
+// No Prisma relation to Incident (logical incidentId). Tenant FK for cascade/isolation.
+// Isolation is also enforced in repositories (every query includes tenantId).
+
+enum AgentFindingStatus {
+  PENDING
+  RUNNING
+  WAITING
+  COMPLETED
+  FAILED
+  SKIPPED
+  TIMEOUT
+}
+
+enum AiopsInvestigationStatus {
+  QUEUED
+  PENDING
+  RUNNING
+  SYNTHESIZING
+  PARTIAL
+  COMPLETED
+  FAILED
+  TIMEOUT
+  CANCELLED
+  BUDGET_EXCEEDED
+}
+
+enum IncidentLifecycle {
+  DETECTED
+  CORRELATING
+  INVESTIGATING
+  ROOT_CAUSE_IDENTIFIED
+  MITIGATING
+  RESOLVED
+  CLOSED
+}
+
+model AiopsInvestigation {
+  id                  String                   @id @default(cuid())
+  tenantId            String
+  tenant              Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  incidentId          String
+  status              AiopsInvestigationStatus @default(QUEUED)
+  incidentLifecycle   IncidentLifecycle?
+  trigger             String                   @default("auto")
+  version             Int                      @default(1)
+  selectedAgents      Json                     @default("[]")
+  skippedAgents       Json                     @default("[]")
+  selectionTrace      Json?
+  budget              Json                     @default("{}")
+  budgetUsed          Json?
+  privacyMode         String?
+  synthesisSummary    String?
+  synthesisEvidence   Json?
+  investigationResult Json?
+  primaryFindingId    String?
+  errorCode           String?
+  errorDetail         String?
+  correlationId       String?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  createdBy           String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  findings AgentFinding[]
+
+  @@unique([tenantId, incidentId, version])
+  @@index([tenantId, incidentId, createdAt])
+  @@index([tenantId, status])
+  @@index([tenantId])
+}
+
+model AgentFinding {
+  id              String              @id @default(cuid())
+  tenantId        String
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  incidentId      String
+  investigationId String?
+  investigation   AiopsInvestigation? @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  agentType       String
+  status          AgentFindingStatus  @default(PENDING)
+  summary         String              @default("")
+  evidence        Json                @default("[]")
+  confidence      Float?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  provider        String?
+  model           String?
+  toolCalls       Json?
+  errors          Json?
+  skipReason      String?
+  plan            Json?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([tenantId, incidentId, agentType])
+  @@index([tenantId, investigationId])
+  @@index([tenantId, status, updatedAt])
+  @@index([tenantId, incidentId, createdAt])
+  @@index([tenantId])
+}
+
+// --- AIOps wave 2 contracts (persistable results; no engines here) ---
+// Do not duplicate Incident, GraphNode, GraphEdge, AgentEvent.
+// StaticThreshold detectors reference PlatformThresholds; they do not copy SLO numbers.
+// Isolation is also enforced in repositories (every query includes tenantId).
+
+enum RcaFeedbackAction {
+  CONFIRM
+  REJECT
+  SELECT_ALTERNATIVE
+  ADD_NOTE
+}
+
+/// Persistencia de AnomalyResult. entityId es clave lógica (GraphNode.nodeKey / Asset.assetKey).
+model AiopsAnomaly {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entityId      String
+  metricName    String
+  timestamp     DateTime
+  actualValue   Float
+  expectedValue Float?
+  deviation     Float?
+  score         Float
+  confidence    Float
+  algorithm     String
+  window        String?
+  metadata      Json?
+  incidentId    String?
+  incident      Incident? @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([tenantId, timestamp])
+  @@index([tenantId, entityId, metricName, timestamp])
+  @@index([tenantId, incidentId])
+}
+
+/// Políticas de detector por targeting. StaticThreshold reusa PlatformThresholds (FK opcional + config.slot/key).
+model AiopsAnomalyPolicy {
+  id                    String              @id @default(cuid())
+  tenantId              String
+  tenant                Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  siteId                String?
+  entityType            String?
+  entityId              String?
+  metric                String?
+  environment           String?
+  detectorType          String
+  config                Json
+  enabled               Boolean             @default(true)
+  weight                Float               @default(1)
+  platformThresholdsId  String?
+  platformThresholds    PlatformThresholds? @relation(fields: [platformThresholdsId], references: [id], onDelete: SetNull)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([tenantId, enabled])
+  @@index([tenantId, entityId, metric])
+  @@index([tenantId, entityType, metric])
+  @@index([tenantId, siteId])
+  @@index([tenantId, detectorType, enabled])
+  @@index([platformThresholdsId])
+}
+
+/// Snapshot 1:1 del incidente enriquecido. Campos indexados = query; JSON = evidencia flexible.
+model IncidentEnrichment {
+  id                    String   @id @default(cuid())
+  incidentId            String   @unique
+  incident              Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  tenantId              String
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  primaryRootCause      String?
+  rcaConfidence         Float?
+  affectedServiceCount  Int?
+  affectedEntities      Json?
+  affectedServices      Json?
+  blastRadius           Json?
+  topologyEvidence      Json?
+  anomalies             Json?
+  rootCauseCandidates   Json?
+  correlationEvidence   Json?
+  timeline              Json?
+  recentChanges         Json?
+  historicalMatches     Json?
+  /// Full IncidentEnrichment snapshot (priority, operatorFeedback, algorithm, …).
+  snapshot              Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([tenantId, incidentId])
+  @@index([tenantId])
+  @@index([tenantId, rcaConfidence])
+  @@index([tenantId, primaryRootCause])
+}
+
+/// Firma estable para matching histórico. hash es canónico por tenant.
+model IncidentSignature {
+  id               String             @id @default(cuid())
+  tenantId         String
+  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  hash             String
+  version          String             @default("v1")
+  entityTypes      String[]           @default([])
+  serviceKey       String?
+  eventTypes       String[]           @default([])
+  anomalyTypes     String[]           @default([])
+  topologyPattern  String?
+  environment      String?
+  incidentIds      String[]           @default([])
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  resolutionRecords ResolutionRecord[]
+
+  @@unique([tenantId, hash])
+  @@index([tenantId, serviceKey])
+  @@index([tenantId, environment])
+  @@index([tenantId, topologyPattern])
+  @@index([tenantId, createdAt])
+}
+
+model ResolutionRecord {
+  id                  String             @id @default(cuid())
+  tenantId            String
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  incidentId          String
+  incident            Incident           @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  signatureId         String?
+  signature           IncidentSignature? @relation(fields: [signatureId], references: [id], onDelete: SetNull)
+  confirmedRootCause  String?
+  rejectedRootCauses  Json?
+  resolution          String?
+  successfulAction    String?
+  timeToDetectMs      Int?
+  timeToResolveMs     Int?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([tenantId, incidentId])
+  @@index([tenantId, signatureId])
+  @@index([tenantId, createdAt])
+}
+
+model RcaFeedback {
+  id               String            @id @default(cuid())
+  tenantId         String
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  incidentId       String
+  incident         Incident          @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  action           RcaFeedbackAction
+  selectedEntityId String?
+  note             String?
+  userId           String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([tenantId, incidentId])
+  @@index([tenantId])
+}
+
+/// Política de investigación multi-agente por tenant. Default de producto: MANUAL + AI_DISABLED.
+model AiopsInvestigationPolicy {
+  id                      String   @id @default(cuid())
+  tenantId                String   @unique
+  tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  mode                    String   @default("MANUAL")
+  privacyMode             String   @default("AI_DISABLED")
+  enabledAgentTypes       Json     @default("[\"Rca\",\"Metrics\",\"Logs\",\"Kubernetes\",\"Topology\",\"Synthesis\"]")
+  budget                  Json     @default("{}")
+  holmesKubernetesEnabled Boolean  @default(false)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+/// Pesos RCA por tenant (y environment). No es la fórmula; el motor lee esta fila.
+/// environment="" = política por defecto del tenant. Defaults suman 1.0.
+model RcaScoringPolicy {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  environment           String   @default("")
+  temporalWeight        Float    @default(0.20)
+  topologyWeight        Float    @default(0.25)
+  anomalyWeight         Float    @default(0.20)
+  dependencyWeight      Float    @default(0.25)
+  historicalWeight      Float    @default(0.10)
+  hops                  Int      @default(8)
+  suppressionEnabled    Boolean  @default(false)
+  minTopologyConfidence Float?
+  config                Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([tenantId, environment])
+  @@index([tenantId])
+}
+
+/// Durable EventBus outbox. HTTP ingest ACKs after AgentEvent+outbox commit.
+/// Workers publish pending rows; multi-replica safe via claim updates.
+model AiopsEventOutbox {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subject        String
+  idempotencyKey String
+  payload        Json
+  headers        Json
+  status         String    @default("pending")
+  attempts       Int       @default(0)
+  lastError      String?
+  availableAt    DateTime  @default(now())
+  publishedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([status, availableAt])
+  @@index([tenantId, status])
 }

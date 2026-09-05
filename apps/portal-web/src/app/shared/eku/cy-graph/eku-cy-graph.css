@@ -1,0 +1,100 @@
+:host {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.eku-cy-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.eku-cy-graph {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.eku-cy-tools {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 3;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.eku-cy-tools__zoom,
+.eku-cy-tools__pan {
+  padding: 0.3rem;
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface);
+}
+
+.eku-cy-tools__zoom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+}
+
+.eku-cy-tools__pan {
+  display: grid;
+  grid-template-columns: repeat(3, 1.85rem);
+  grid-template-rows: repeat(3, 1.85rem);
+  gap: 0.15rem;
+  justify-content: center;
+}
+
+.eku-cy-tools__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.85rem;
+  margin: 0;
+  padding: 0 0.4rem;
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface);
+  color: var(--eku-text-primary);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.eku-cy-tools__btn:hover,
+.eku-cy-tools__btn:focus-visible {
+  border-color: var(--eku-primary);
+  background: color-mix(in srgb, var(--eku-primary) 10%, var(--eku-surface));
+}
+
+.eku-cy-tools__btn--wide {
+  grid-column: 1 / -1;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.eku-cy-tools__pan-up {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.eku-cy-tools__pan-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.eku-cy-tools__pan-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.eku-cy-tools__pan-down {
+  grid-column: 2;
+  grid-row: 3;
+}

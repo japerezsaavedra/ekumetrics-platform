@@ -7,6 +7,7 @@ import {
   mergePlatformThresholds,
   type PlatformThresholds,
 } from './platform-thresholds';
+import { PLATFORM_NAMESPACE, buildClusterView, emptyClusterView } from './platform-cluster';
 
 const RANGE_SECONDS = 3600;
 const RANGE_STEP = 30;
@@ -16,6 +17,7 @@ const NET = 'eth0|enp.*|ens.*|eno.*';
 const SERVICE_LABELS: Record<string, string> = {
   'platform-api': 'API',
   'node-exporter': 'Host',
+  'kube-state-metrics': 'Kubernetes',
   prometheus: 'Prometheus',
   tempo: 'Tempo',
   'otel-collector': 'OTLP',
@@ -29,8 +31,9 @@ export class PlatformService {
   ) {}
 
   async overview() {
-    const [host, services, slo, api, series, logs, traces, thresholds] = await Promise.all([
+    const [host, cluster, services, slo, api, series, logs, traces, thresholds] = await Promise.all([
       this.hostSnapshot(),
+      this.clusterSnapshot(),
       this.services(),
       this.sloSnapshot(),
       this.apiSnapshot(),
@@ -41,6 +44,7 @@ export class PlatformService {
     ]);
     return {
       host,
+      cluster,
       services,
       slo: { ...slo, saturation: this.saturationFrom(host) },
       api,
@@ -142,6 +146,66 @@ export class PlatformService {
       disk,
       driver: worst?.key ?? null,
     };
+  }
+
+  private async clusterSnapshot() {
+    try {
+      const [
+        nodeInfo,
+        nodeReady,
+        nodeUnschedulable,
+        nodeCpuAlloc,
+        nodeMemAlloc,
+        nodeCpuUsed,
+        nodeMemUsed,
+        podPhases,
+        platformPodPhases,
+        deploymentsDesired,
+        deploymentsAvailable,
+        daemonsetsDesired,
+        daemonsetsReady,
+        statefulsetsDesired,
+        statefulsetsReady,
+        waitingReasons,
+      ] = await Promise.all([
+        this.rows('kube_node_info'),
+        this.rows('kube_node_status_condition{condition="Ready",status="true"}'),
+        this.rows('kube_node_spec_unschedulable'),
+        this.rows('kube_node_status_allocatable{resource="cpu"}'),
+        this.rows('kube_node_status_allocatable{resource="memory"}'),
+        this.rows('1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))'),
+        this.rows('1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes'),
+        this.rows('count by (phase) (kube_pod_status_phase == 1)'),
+        this.rows(`count by (phase) (kube_pod_status_phase{namespace="${PLATFORM_NAMESPACE}"} == 1)`),
+        this.rows(`kube_deployment_spec_replicas{namespace="${PLATFORM_NAMESPACE}"}`),
+        this.rows(`kube_deployment_status_replicas_available{namespace="${PLATFORM_NAMESPACE}"}`),
+        this.rows(`kube_daemonset_status_desired_number_scheduled{namespace="${PLATFORM_NAMESPACE}"}`),
+        this.rows(`kube_daemonset_status_number_ready{namespace="${PLATFORM_NAMESPACE}"}`),
+        this.rows(`kube_statefulset_replicas{namespace="${PLATFORM_NAMESPACE}"}`),
+        this.rows(`kube_statefulset_status_replicas_ready{namespace="${PLATFORM_NAMESPACE}"}`),
+        this.rows(`kube_pod_container_status_waiting_reason{namespace="${PLATFORM_NAMESPACE}"} == 1`),
+      ]);
+      return buildClusterView({
+        nodeInfo,
+        nodeReady,
+        nodeUnschedulable,
+        nodeCpuAlloc,
+        nodeMemAlloc,
+        nodeCpuUsed,
+        nodeMemUsed,
+        podPhases,
+        platformPodPhases,
+        deploymentsDesired,
+        deploymentsAvailable,
+        daemonsetsDesired,
+        daemonsetsReady,
+        statefulsetsDesired,
+        statefulsetsReady,
+        waitingReasons,
+      });
+    } catch {
+      return emptyClusterView();
+    }
   }
 
   private async hostSnapshot() {
@@ -275,15 +339,63 @@ export class PlatformService {
         return [];
       }
       const startMs = Math.max(parsedStart, endMs - 7 * 86_400_000);
+      const window = Math.ceil((endMs - startMs) / 1000);
+      const k8s = await this.telemetry.lokiLines(
+        '{namespace="ekumetrics"}',
+        window,
+        500,
+        { startMs, endMs },
+      );
+      if (k8s.length > 0) {
+        return k8s;
+      }
       return await this.telemetry.lokiLines(
         '{job="platform-host"}',
-        Math.ceil((endMs - startMs) / 1000),
+        window,
         500,
         { startMs, endMs },
       );
     } catch {
       return [];
     }
+  }
+
+  async queryTraces(from?: string, to?: string, operation?: string) {
+    try {
+      const endMs = to ? Date.parse(to) : Date.now();
+      const parsedStart = from ? Date.parse(from) : endMs - RANGE_SECONDS * 1000;
+      if (!Number.isFinite(endMs) || !Number.isFinite(parsedStart) || parsedStart >= endMs) {
+        return [];
+      }
+      const startMs = Math.max(parsedStart, endMs - 7 * 86_400_000);
+      const window = Math.ceil((endMs - startMs) / 1000);
+      return await this.telemetry.tempoSearch(
+        this.traceQuery(operation),
+        window,
+        100,
+        10,
+        { startMs, endMs },
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  async getTrace(traceId: string) {
+    try {
+      return await this.telemetry.tempoTrace(traceId);
+    } catch {
+      return null;
+    }
+  }
+
+  private traceQuery(operation?: string): string {
+    const base = '{ resource.service.name = "ekumetrics-platform-api" }';
+    const op = (operation ?? '').trim().slice(0, 200);
+    if (!op || op === 'todas' || !/^[\w ./:+-]+$/.test(op)) {
+      return base;
+    }
+    return `{ resource.service.name = "ekumetrics-platform-api" && name = "${op}" }`;
   }
 
   private async logLines() {
@@ -296,7 +408,7 @@ export class PlatformService {
         '{ resource.service.name = "ekumetrics-platform-api" }',
         RANGE_SECONDS,
         20,
-        4,
+        10,
       );
     } catch {
       return [];

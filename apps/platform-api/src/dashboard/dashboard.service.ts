@@ -1,7 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PlatformService } from '../platform/platform.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantsService } from '../tenants/tenants.service';
+import {
+  applyTenantModuleFilter,
+  dashboardViewModule,
+  parseStoredModules,
+  tenantHasModule,
+  type OptionalTenantModule,
+} from '../tenants/tenant-modules';
 import { TelemetryClient, type InstantRow } from './telemetry.client';
 
 export type DashboardHost = {
@@ -88,27 +95,39 @@ export class DashboardService {
     const tenantSlug = this.sanitize(tenantInput);
     const siteSlug = this.sanitize(siteInput);
     if (!tenantSlug) return this.emptyInventory();
+    const modules = await this.modulesFor(tenantSlug);
     const [hosts, nics, databases, networkDevices, queues, icewarp, sap] =
       await Promise.all([
         this.listHosts(tenantSlug),
         this.listNics(tenantSlug),
-        this.listDatabases(tenantSlug),
-        this.listNetworkDevices(tenantSlug),
-        this.listQueues(tenantSlug),
-        this.listIcewarp(tenantSlug),
-        this.listSap(tenantSlug),
+        this.optionalInventory(modules, 'databases', () =>
+          this.listDatabases(tenantSlug),
+        ),
+        this.optionalInventory(modules, 'network', () =>
+          this.listNetworkDevices(tenantSlug),
+        ),
+        this.optionalInventory(modules, 'queues', () =>
+          this.listQueues(tenantSlug),
+        ),
+        this.optionalInventory(modules, 'icewarp', () =>
+          this.listIcewarp(tenantSlug),
+        ),
+        this.optionalInventory(modules, 'sap', () => this.listSap(tenantSlug)),
       ]);
     const inSite = <T extends { siteId: string | null }>(items: T[]) =>
       items.filter((item) => !siteSlug || item.siteId === siteSlug);
-    return {
-      hosts: inSite(hosts),
-      nics: inSite(nics),
-      databases: inSite(databases),
-      networkDevices: inSite(networkDevices),
-      queues: inSite(queues),
-      icewarp: inSite(icewarp),
-      sap: inSite(sap),
-    };
+    return applyTenantModuleFilter(
+      {
+        hosts: inSite(hosts),
+        nics: inSite(nics),
+        databases: inSite(databases),
+        networkDevices: inSite(networkDevices),
+        queues: inSite(queues),
+        icewarp: inSite(icewarp),
+        sap: inSite(sap),
+      },
+      modules,
+    );
   }
 
   private emptyInventory() {
@@ -123,6 +142,25 @@ export class DashboardService {
     };
   }
 
+  private async modulesFor(tenantSlug?: string) {
+    if (!tenantSlug) {
+      return [];
+    }
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { modules: true },
+    });
+    return parseStoredModules(tenant?.modules);
+  }
+
+  private optionalInventory<T>(
+    modules: unknown,
+    id: OptionalTenantModule,
+    load: () => Promise<T[]>,
+  ): Promise<T[]> {
+    return tenantHasModule(modules, id) ? load() : Promise.resolve([]);
+  }
+
   async getDashboard(
     agentIdInput?: string,
     rangeInput?: string,
@@ -133,6 +171,11 @@ export class DashboardService {
     const window = this.windowFor(rangeInput);
     const tenantSlug = this.sanitize(tenantInput);
     const siteSlug = this.sanitize(siteInput);
+    const tenantModules = await this.modulesFor(tenantSlug);
+    const viewModule = dashboardViewModule(viewInput);
+    if (viewModule && !tenantHasModule(tenantModules, viewModule)) {
+      throw new ForbiddenException('Este tenant no tiene ese modulo.');
+    }
     const rawHosts = (await this.listHosts(tenantSlug)).filter(
       (item) => !siteSlug || item.siteId === siteSlug,
     );
@@ -147,22 +190,40 @@ export class DashboardService {
     ] = await Promise.all([
       this.enrichHosts(rawHosts),
       this.listNics(tenantSlug),
-      this.listDatabases(tenantSlug),
-      this.listNetworkDevices(tenantSlug),
-      this.listQueues(tenantSlug),
-      this.listIcewarp(tenantSlug),
-      this.listSap(tenantSlug),
+      this.optionalInventory(tenantModules, 'databases', () =>
+        this.listDatabases(tenantSlug),
+      ),
+      this.optionalInventory(tenantModules, 'network', () =>
+        this.listNetworkDevices(tenantSlug),
+      ),
+      this.optionalInventory(tenantModules, 'queues', () =>
+        this.listQueues(tenantSlug),
+      ),
+      this.optionalInventory(tenantModules, 'icewarp', () =>
+        this.listIcewarp(tenantSlug),
+      ),
+      this.optionalInventory(tenantModules, 'sap', () => this.listSap(tenantSlug)),
     ]);
     const inSite = <T extends { siteId: string | null }>(items: T[]) =>
       items.filter((item) => !siteSlug || item.siteId === siteSlug);
     const nics = inSite(allNics);
-    const databases = inSite(allDatabases);
-    const networkDevices = inSite(allNetworkDevices);
-    const queues = inSite(allQueues);
-    const icewarp = inSite(allIcewarp);
-    const sap = inSite(allSap);
+    const databases = tenantHasModule(tenantModules, 'databases')
+      ? inSite(allDatabases)
+      : [];
+    const networkDevices = tenantHasModule(tenantModules, 'network')
+      ? inSite(allNetworkDevices)
+      : [];
+    const queues = tenantHasModule(tenantModules, 'queues')
+      ? inSite(allQueues)
+      : [];
+    const icewarp = tenantHasModule(tenantModules, 'icewarp')
+      ? inSite(allIcewarp)
+      : [];
+    const sap = tenantHasModule(tenantModules, 'sap') ? inSite(allSap) : [];
     const requested = this.sanitize(agentIdInput);
-    const wantIcewarp = this.sanitize(viewInput) === 'icewarp';
+    const wantIcewarp =
+      this.sanitize(viewInput) === 'icewarp' &&
+      tenantHasModule(tenantModules, 'icewarp');
     const hostId = wantIcewarp
       ? requested || icewarp[0]?.hostId || hosts[0]?.id || null
       : (requested && hosts.some((item) => item.id === requested)

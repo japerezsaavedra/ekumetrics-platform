@@ -54,6 +54,34 @@
   color: var(--eku-text-secondary);
 }
 
+.tenants__modules {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eku-space-4);
+  margin: 0 0 var(--eku-space-4);
+  padding: 0;
+  border: 0;
+}
+
+.tenants__modules legend {
+  margin: 0 0 0.35rem;
+  color: var(--eku-text-secondary);
+  font-size: 0.85rem;
+}
+
+.tenants__modules p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--eku-text-secondary);
+}
+
+.tenants__modules label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .tenants__card-actions {
   display: flex;
   align-items: center;

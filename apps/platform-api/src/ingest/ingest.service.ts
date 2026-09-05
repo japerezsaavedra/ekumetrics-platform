@@ -2,12 +2,16 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import {
   ForbiddenException,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GraphService } from '../aiops/graph.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { type EkmsEvent, parseEventBatch } from './ingest.types';
+import { EventSubjects, buildHeaders } from '../messaging';
+import { EventOutboxService } from '../messaging/event-outbox.service';
+import type { EventsIngestedPayload } from '../aiops/contracts/events';
 
 const ASSET_SIGNALS = new Set([
   'asset_discovered',
@@ -47,6 +51,7 @@ export class IngestService {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly graph: GraphService,
+    @Optional() private readonly outbox?: EventOutboxService,
   ) {}
 
   async ingest(
@@ -96,6 +101,12 @@ export class IngestService {
       severity: event.severity,
       source: event.source,
       tags: event.tags,
+      category: event.category,
+      entityType: event.entityType,
+      correlationKey: event.correlationKey,
+      environment: event.environment,
+      traceId: event.traceId,
+      metadata: event.metadata,
       eventAt: event.timestamp,
     }));
     const accepted = await this.prisma.$transaction(
@@ -103,7 +114,25 @@ export class IngestService {
         const created = await tx.agentEvent.createManyAndReturn({
           data: eventRows,
           skipDuplicates: true,
-          select: { fingerprint: true },
+          select: {
+            id: true,
+            fingerprint: true,
+            tenantId: true,
+            siteId: true,
+            agentId: true,
+            assetKey: true,
+            assetType: true,
+            signal: true,
+            value: true,
+            unit: true,
+            category: true,
+            entityType: true,
+            environment: true,
+            eventAt: true,
+            metadata: true,
+            tags: true,
+            source: true,
+          },
         });
         const inserted = new Set(created.map((row) => row.fingerprint));
         const acceptedAssetEvents = events
@@ -151,11 +180,26 @@ export class IngestService {
           where: { id: agent.id },
           data: { lastSeenAt: new Date() },
         });
+        if (this.outbox && created.length > 0) {
+          const byFingerprint = new Map(
+            events.map((event, index) => [
+              eventRows[index].fingerprint,
+              event,
+            ]),
+          );
+          await this.outbox.enqueueMany(
+            tx,
+            created.map((row) =>
+              toOutboxMessage(row, byFingerprint.get(row.fingerprint)),
+            ),
+          );
+        }
         return created.length;
       },
       { isolationLevel: 'Serializable' },
     );
     await this.recordNeighbors(tenant.id, events);
+    void this.outbox?.flush();
     return {
       status: 'accepted',
       received: events.length,
@@ -167,7 +211,11 @@ export class IngestService {
   private async recordNeighbors(tenantId: string, events: EkmsEvent[]) {
     for (const event of events) {
       const neighborKey = event.tags.neighbor_key;
-      if (event.signal !== 'neighbor_observed' || !event.assetId || !neighborKey) {
+      if (
+        event.signal !== 'neighbor_observed' ||
+        !event.assetId ||
+        !neighborKey
+      ) {
         continue;
       }
       await this.graph.upsertNeighbor(tenantId, {
@@ -251,8 +299,120 @@ export class IngestService {
           severity: event.severity ?? '',
           source: event.source,
           tags: event.tags,
+          ...event.fingerprintExtras,
         }),
       )
       .digest('hex');
   }
+}
+
+function toOutboxMessage(
+  row: {
+    id: string;
+    fingerprint: string;
+    tenantId: string;
+    siteId: string;
+    agentId: string;
+    assetKey: string | null;
+    assetType: string | null;
+    signal: string;
+    value: number;
+    category: string | null;
+    entityType: string | null;
+    environment: string | null;
+    eventAt: Date;
+    metadata: unknown;
+    tags: unknown;
+  },
+  original?: EkmsEvent,
+) {
+  const metadata = asRecord(row.metadata) ?? asRecord(original?.metadata);
+  const tags = asStringMap(row.tags) ?? original?.tags ?? {};
+  const labels = asStringMap(metadata?.labels);
+  const entityId =
+    optionalString(metadata?.entityId) ??
+    optionalString(metadata?.entity_id) ??
+    row.assetKey ??
+    original?.assetId;
+  const metricName =
+    optionalString(metadata?.metricName) ??
+    optionalString(metadata?.metric_name) ??
+    original?.metadata?.metricName ??
+    row.signal;
+  const payload: EventsIngestedPayload = {
+    tenantId: row.tenantId,
+    agentEventId: row.id,
+    fingerprint: row.fingerprint,
+    siteId: row.siteId,
+    agentId: row.agentId,
+    entityId: entityId ?? undefined,
+    entityType: row.entityType ?? original?.entityType ?? undefined,
+    assetKey: row.assetKey ?? undefined,
+    signal: row.signal,
+    category: row.category ?? undefined,
+    timestamp: row.eventAt.toISOString(),
+    eventAt: row.eventAt.toISOString(),
+    value: row.value,
+    metricName,
+    environment: row.environment ?? original?.environment,
+    labels,
+    attributes: asAttributeMap(metadata?.attributes),
+    metadata: metadata ?? undefined,
+    tags,
+  };
+  return {
+    tenantId: row.tenantId,
+    subject: EventSubjects.EVENTS_INGESTED,
+    idempotencyKey: `${row.tenantId}:events.ingested:${row.id}`,
+    payload,
+    headers: buildHeaders({
+      tenantId: row.tenantId,
+      siteId: row.siteId,
+      agentId: original?.agentId,
+      correlationId: original?.traceId ?? row.id,
+      producedBy: 'ingest-service',
+      occurredAt: row.eventAt.toISOString(),
+    }),
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
+function asStringMap(value: unknown): Record<string, string> | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+  const mapped: Record<string, string> = {};
+  for (const [key, item] of Object.entries(record)) {
+    if (typeof item === 'string') mapped[key] = item;
+  }
+  return Object.keys(mapped).length > 0 ? mapped : undefined;
+}
+
+function asAttributeMap(
+  value: unknown,
+): Record<string, string | number | boolean> | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+  const mapped: Record<string, string | number | boolean> = {};
+  for (const [key, item] of Object.entries(record)) {
+    if (
+      typeof item === 'string' ||
+      typeof item === 'boolean' ||
+      (typeof item === 'number' && Number.isFinite(item))
+    ) {
+      mapped[key] = item;
+    }
+  }
+  return Object.keys(mapped).length > 0 ? mapped : undefined;
+}
+
+function optionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
 }

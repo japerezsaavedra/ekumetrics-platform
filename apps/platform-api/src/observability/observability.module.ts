@@ -15,5 +15,6 @@ import { EventRetentionService } from './event-retention.service';
       useClass: MetricsInterceptor,
     },
   ],
+  exports: [MetricsService],
 })
 export class ObservabilityModule {}

@@ -1,0 +1,60 @@
+<div class="eku-cy-wrap">
+  <div class="eku-cy-graph" #host></div>
+  <div class="eku-cy-tools" role="toolbar" aria-label="Zoom y desplazamiento">
+    <div class="eku-cy-tools__zoom">
+      <button type="button" class="eku-cy-tools__btn" (click)="zoomIn()" title="Acercar" aria-label="Acercar">
+        +
+      </button>
+      <button type="button" class="eku-cy-tools__btn" (click)="zoomOut()" title="Alejar" aria-label="Alejar">
+        −
+      </button>
+      <button
+        type="button"
+        class="eku-cy-tools__btn eku-cy-tools__btn--wide"
+        (click)="fitView()"
+        title="Encajar en pantalla"
+        aria-label="Encajar en pantalla"
+      >
+        Encajar
+      </button>
+    </div>
+    <div class="eku-cy-tools__pan">
+      <button
+        type="button"
+        class="eku-cy-tools__btn eku-cy-tools__pan-up"
+        (click)="pan(0, 1)"
+        title="Mover arriba"
+        aria-label="Mover arriba"
+      >
+        ↑
+      </button>
+      <button
+        type="button"
+        class="eku-cy-tools__btn eku-cy-tools__pan-left"
+        (click)="pan(1, 0)"
+        title="Mover izquierda"
+        aria-label="Mover izquierda"
+      >
+        ←
+      </button>
+      <button
+        type="button"
+        class="eku-cy-tools__btn eku-cy-tools__pan-right"
+        (click)="pan(-1, 0)"
+        title="Mover derecha"
+        aria-label="Mover derecha"
+      >
+        →
+      </button>
+      <button
+        type="button"
+        class="eku-cy-tools__btn eku-cy-tools__pan-down"
+        (click)="pan(0, -1)"
+        title="Mover abajo"
+        aria-label="Mover abajo"
+      >
+        ↓
+      </button>
+    </div>
+  </div>
+</div>

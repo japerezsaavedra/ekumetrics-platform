@@ -57,8 +57,12 @@ export class AppShell {
   protected readonly nav = computed(() => {
     const operator = this.tenants.isOperator();
     const role = this.auth.role();
+    const modules = new Set(this.tenants.enabledModules());
     return NAV_ITEMS.filter(
-      (item) => (!item.operatorOnly || operator) && (!item.roles || item.roles.includes(role)),
+      (item) =>
+        (!item.operatorOnly || operator) &&
+        (!item.roles || item.roles.includes(role)) &&
+        (!item.module || modules.has(item.module)),
     ).map((item) => ({
       ...item,
       children: item.children?.filter(

@@ -15,11 +15,17 @@ type Counter = {
 @Injectable()
 export class MetricsService {
   private readonly counters = new Map<string, Counter>();
+  private readonly contributors = new Map<string, () => string>();
   private retentionDeleted = 0;
   private retentionFailures = 0;
   private retentionLastSuccess?: number;
 
   constructor(private readonly prisma: PrismaService) {}
+
+  /** Permite a otros módulos (p.ej. correlación AIOps) aportar series Prometheus. */
+  registerContributor(id: string, render: () => string) {
+    this.contributors.set(id, render);
+  }
 
   observe(method: string, route: string, statusCode: number, seconds: number) {
     const normalizedMethod = method.toUpperCase().slice(0, 12);
@@ -124,6 +130,10 @@ export class MetricsService {
         '# TYPE ekumetrics_event_retention_last_success_timestamp_seconds gauge',
         `ekumetrics_event_retention_last_success_timestamp_seconds ${this.retentionLastSuccess}`,
       );
+    }
+    for (const render of this.contributors.values()) {
+      const extra = render().trim();
+      if (extra) lines.push(extra);
     }
     return `${lines.join('\n')}\n`;
   }

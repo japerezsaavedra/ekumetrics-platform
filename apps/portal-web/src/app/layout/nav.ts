@@ -1,4 +1,5 @@
 import type { AuthRole } from '../core/auth';
+import type { OptionalTenantModule } from '../core/tenant-modules';
 
 export type NavChild = {
   label: string;
@@ -15,18 +16,32 @@ export type NavItem = {
   children?: NavChild[];
   operatorOnly?: boolean;
   roles?: AuthRole[];
+  module?: OptionalTenantModule;
 };
 
 export const NAV_ITEMS: NavItem[] = [
   { id: 'asistente', label: 'EkuAssistant AI', icon: 'smart_toy', path: '/asistente' },
   { id: 'hosts', label: 'Hosts', icon: 'dns', path: '/hosts' },
-  { id: 'red', label: 'Red', icon: 'lan', path: '/red' },
+  { id: 'red', label: 'Red', icon: 'lan', path: '/red', module: 'network' },
   { id: 'agentes', label: 'Agentes', icon: 'memory', path: '/agentes' },
-  { id: 'databases', label: 'Bases de datos', icon: 'storage', path: '/bases-de-datos' },
-  { id: 'queues', label: 'Colas', icon: 'account_tree', path: '/colas' },
-  { id: 'icewarp', label: 'IceWarp', icon: 'mail', path: '/icewarp' },
-  { id: 'sap', label: 'SAP', icon: 'lan', path: '/sap' },
+  {
+    id: 'databases',
+    label: 'Bases de datos',
+    icon: 'storage',
+    path: '/bases-de-datos',
+    module: 'databases',
+  },
+  { id: 'queues', label: 'Colas', icon: 'account_tree', path: '/colas', module: 'queues' },
+  { id: 'icewarp', label: 'IceWarp', icon: 'mail', path: '/icewarp', module: 'icewarp' },
+  { id: 'sap', label: 'SAP', icon: 'lan', path: '/sap', module: 'sap' },
   { id: 'dashboards', label: 'Dashboards', icon: 'dashboard_customize', path: '/dashboards' },
+  {
+    id: 'investigacion',
+    label: 'Investigación',
+    icon: 'hub',
+    path: '/investigacion',
+    roles: ['operator', 'admin'],
+  },
   {
     id: 'alerts',
     label: 'Alertas',
@@ -66,5 +81,6 @@ export function navGroupOpenByDefault(path: string): Record<string, boolean> {
   return {
     admin: path.startsWith('/administracion'),
     alerts: path.startsWith('/alertas') || path.startsWith('/incidentes'),
+    plataforma: path.startsWith('/plataforma'),
   };
 }

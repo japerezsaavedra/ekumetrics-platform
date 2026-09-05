@@ -1,0 +1,59 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ekumetrics
+  labels:
+    app.kubernetes.io/name: ekumetrics
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ekumetrics.gd.lan
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: portal-web
+                port:
+                  name: http
+    - host: api-ekumetrics.gd.lan
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: platform-api
+                port:
+                  name: http
+    - host: auth-ekumetrics.gd.lan
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  name: http
+    - host: grafana-ekumetrics.gd.lan
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  name: http
+    - host: ingest-ekumetrics.gd.lan
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ingest-gateway
+                port:
+                  name: http

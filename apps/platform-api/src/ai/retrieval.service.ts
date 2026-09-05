@@ -7,6 +7,10 @@ import {
 import { DashboardService } from '../dashboard/dashboard.service';
 import { TelemetryClient } from '../dashboard/telemetry.client';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  tenantHasModule,
+  type OptionalTenantModule,
+} from '../tenants/tenant-modules';
 import { KnowledgeService } from './knowledge.service';
 
 export type RetrievalMetric =
@@ -56,7 +60,15 @@ export type RetrievalEvidence = {
 
 type AuthorizedContext = RetrievalContext & {
   tenantId: string;
+  modules: string[];
   agentDbId?: string;
+};
+
+const METRIC_MODULE: Partial<Record<RetrievalMetric, OptionalTenantModule>> = {
+  database_presence: 'databases',
+  queue_presence: 'queues',
+  sap_sessions: 'sap',
+  icewarp_service_running: 'icewarp',
 };
 
 @Injectable()
@@ -148,6 +160,16 @@ export class RetrievalService {
   ) {
     const auth = await this.authorize(context, true);
     const seconds = this.windowSeconds(windowMinutes);
+    const required = METRIC_MODULE[metric];
+    if (required && !tenantHasModule(auth.modules, required)) {
+      return this.result(
+        'prometheus',
+        `get_metric_series:${metric}`,
+        seconds,
+        [],
+        0,
+      );
+    }
     const step = Math.max(10, Math.ceil(seconds / 600));
     const query = this.metricQuery(auth, metric);
     const rows = (await this.telemetry.range(query, seconds, step))
@@ -442,11 +464,11 @@ export class RetrievalService {
     if (requireAgent && !agentId) {
       throw new BadRequestException('La herramienta requiere un agente.');
     }
-    let tenant: { id: string; slug: string } | null;
+    let tenant: { id: string; slug: string; modules: string[] } | null;
     try {
       tenant = await this.prisma.tenant.findUnique({
         where: { slug: tenantSlug },
-        select: { id: true, slug: true },
+        select: { id: true, slug: true, modules: true },
       });
     } catch {
       throw new ServiceUnavailableException(
@@ -454,7 +476,14 @@ export class RetrievalService {
       );
     }
     if (!tenant) throw new ForbiddenException('Contexto no autorizado.');
-    if (!agentId) return { ...context, tenantId: tenant.id, tenantSlug };
+    if (!agentId) {
+      return {
+        ...context,
+        tenantId: tenant.id,
+        tenantSlug,
+        modules: tenant.modules,
+      };
+    }
     const agent = await this.prisma.agent.findUnique({
       where: { tenantId_agentId: { tenantId: tenant.id, agentId } },
       select: { id: true, agentId: true, siteId: true },
@@ -467,6 +496,7 @@ export class RetrievalService {
       ...context,
       tenantId: tenant.id,
       tenantSlug,
+      modules: tenant.modules,
       agentDbId: agent.id,
       agentId: agent.agentId,
       siteId: agent.siteId,

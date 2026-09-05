@@ -8,6 +8,7 @@ import { AgentPage } from './pages/agent/agent-page';
 import { AlertChannelsPage } from './pages/alerts/alert-channels-page';
 import { AlertsPage } from './pages/alerts/alerts-page';
 import { IncidentsPage } from './pages/incidents/incidents-page';
+import { InvestigacionPage } from './pages/investigacion/investigacion-page';
 import { HolmesPage } from './pages/holmes/holmes-page';
 import { HomePage } from './pages/home/home-page';
 import { LoginPage } from './pages/login/login-page';
@@ -78,6 +79,13 @@ export const routes: Routes = [
     canActivate: [authGuard, roleGuard],
     data: { roles: ['operator', 'admin'] },
   },
+  {
+    path: 'investigacion',
+    component: InvestigacionPage,
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['operator', 'admin'] },
+  },
+  { path: 'correlacion', redirectTo: 'investigacion', pathMatch: 'full' },
   {
     path: 'alertas/canales',
     component: AlertChannelsPage,

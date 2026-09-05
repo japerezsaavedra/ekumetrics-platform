@@ -1,0 +1,102 @@
+.enrichment {
+  display: grid;
+  gap: var(--eku-space-2);
+  margin-top: var(--eku-space-2);
+}
+
+.enrichment__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--eku-space-2);
+}
+
+.enrichment h3,
+.enrichment h4,
+.enrichment p {
+  margin: 0;
+}
+
+.enrichment h3,
+.enrichment h4 {
+  color: var(--eku-text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.enrichment h4 {
+  font-size: 0.92rem;
+}
+
+.enrichment__empty {
+  color: var(--eku-text-secondary);
+  font-size: 0.85rem;
+}
+
+.enrichment__prio {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.35rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--eku-border);
+  background: var(--eku-surface-container);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.enrichment dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--eku-space-2);
+  margin: 0;
+}
+
+.enrichment dt {
+  color: var(--eku-text-secondary);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.enrichment dd {
+  margin: 0.15rem 0 0;
+}
+
+.enrichment ul,
+.enrichment__time {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.enrichment__time time {
+  color: var(--eku-text-secondary);
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.4rem;
+}
+
+.enrichment__ai {
+  display: grid;
+  gap: 0.35rem;
+  padding: var(--eku-space-2);
+  border: 1px dashed var(--eku-border);
+}
+
+.enrichment__agents {
+  font-family: var(--eku-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.82rem;
+}
+
+.enrichment__agent {
+  color: var(--eku-text-primary);
+  font-weight: 600;
+}
+
+.enrichment__form .eku-add {
+  justify-self: start;
+}
+
+@media (max-width: 47.99rem) {
+  .enrichment dl {
+    grid-template-columns: 1fr;
+  }
+}

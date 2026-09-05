@@ -63,6 +63,16 @@
           }}</small>
         </label>
       }
+      <fieldset class="tenants__modules" formGroupName="modules">
+        <legend>Modulos opcionales</legend>
+        <p>Apagados por defecto. Solo Gradotech los activa para este tenant.</p>
+        @for (item of moduleCatalog; track item.id) {
+          <label>
+            <input type="checkbox" [formControlName]="item.id" />
+            {{ item.label }}
+          </label>
+        }
+      </fieldset>
       <button type="submit" [disabled]="saving()">
         {{
           saving()
@@ -107,9 +117,10 @@
           {{ item._count?.sites ?? item.sites?.length ?? 0 }} sitios ·
           {{ item._count?.agents ?? 0 }} agentes
         </p>
+        <p>{{ modulesLabel(item) }}</p>
         <div class="tenants__card-actions">
           <button type="button" (click)="useTenant(item.slug)">Usar este tenant</button>
-          @if (isOperator() && item.slug !== 'default') {
+          @if (isOperator()) {
             <button
               type="button"
               class="eku-icon-btn"
@@ -119,15 +130,17 @@
             >
               <mat-icon>edit</mat-icon>
             </button>
-            <button
-              type="button"
-              class="eku-icon-btn eku-icon-btn--danger"
-              matTooltip="Eliminar"
-              (click)="remove(item)"
-              aria-label="Eliminar tenant"
-            >
-              <mat-icon>delete</mat-icon>
-            </button>
+            @if (item.slug !== 'default') {
+              <button
+                type="button"
+                class="eku-icon-btn eku-icon-btn--danger"
+                matTooltip="Eliminar"
+                (click)="remove(item)"
+                aria-label="Eliminar tenant"
+              >
+                <mat-icon>delete</mat-icon>
+              </button>
+            }
           }
         </div>
       </article>

@@ -1,0 +1,216 @@
+<section class="correlacion">
+  <eku-page-header
+    title="Correlación"
+    subtitle="Pulse un equipo para ver por qué entra en el incidente: vecinos, saltos hasta la causa y alertas que cubre."
+  >
+    <div ekuActions class="correlacion__actions">
+      <button type="button" class="eku-add" (click)="load()">Actualizar</button>
+      <button type="button" class="eku-add" (click)="correlate()" [disabled]="correlating()">
+        {{ correlating() ? 'Correlacionando…' : 'Correlacionar' }}
+      </button>
+    </div>
+    @if (error(); as message) {
+      <eku-error-state [message]="message" />
+    }
+  </eku-page-header>
+
+  <form class="eku-form eku-form--inline correlacion__filters" [formGroup]="filters">
+    <label class="eku-field">
+      <span>Sitio</span>
+      <select formControlName="siteId">
+        <option value="">Todos</option>
+        @for (site of siteOptions(); track site.id) {
+          <option [value]="site.id">{{ site.label }}</option>
+        }
+      </select>
+      <small></small>
+    </label>
+  </form>
+
+  @if (loading()) {
+    <eku-loading-skeleton label="Cargando correlación" [bars]="4" />
+  } @else {
+    <div class="correlacion__layout">
+      <aside class="correlacion__side">
+        @if (exampleOn()) {
+          <p class="correlacion__hint">
+            Todavía no hay vecinos LLDP reales. El árbol muestra cómo el motor elige una causa
+            común para tres alertas.
+          </p>
+          <button type="button" class="eku-add" (click)="seedExample()" [disabled]="seeding()">
+            {{ seeding() ? 'Guardando…' : 'Guardar ejemplo en este tenant' }}
+          </button>
+        }
+        @if (incidents().length === 0 && !exampleOn()) {
+          <eku-empty-state
+            title="Sin incidentes"
+            message="Correlacione las alertas activas cuando el grafo tenga vecinos."
+          />
+        } @else if (incidents().length > 0) {
+          <ul class="correlacion__list">
+            @for (item of incidents(); track item.id) {
+              <li>
+                <button
+                  type="button"
+                  class="correlacion__row"
+                  [class.is-on]="item.id === selected()?.id"
+                  (click)="select(item)"
+                >
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.alertCount }} alertas · {{ item.severity }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+        @if (selected(); as incident) {
+          <dl class="correlacion__facts">
+            <div>
+              <dt>Causa</dt>
+              <dd>{{ incident.causeName || 'Sin elemento común' }}</dd>
+            </div>
+            <div>
+              <dt>Confianza</dt>
+              <dd>{{ confidence(incident.confidence) }}</dd>
+            </div>
+            <div>
+              <dt>Actualizado</dt>
+              <dd>{{ incident.updatedAt | date: 'short' }}</dd>
+            </div>
+          </dl>
+        } @else if (demoRoles()) {
+          <dl class="correlacion__facts">
+            <div>
+              <dt>Causa</dt>
+              <dd>Core switch</dd>
+            </div>
+            <div>
+              <dt>Confianza</dt>
+              <dd>{{ confidence(null) }}</dd>
+            </div>
+            <div>
+              <dt>Alertas</dt>
+              <dd>API Pagos, SAP, PostgreSQL</dd>
+            </div>
+          </dl>
+        }
+      </aside>
+
+      <div class="correlacion__tree" role="tree">
+        @for (level of levels(); track level.depth; let last = $last) {
+          <section class="correlacion__level">
+            <h2>{{ level.label }}</h2>
+            <div class="correlacion__nodes">
+              @for (node of level.nodes; track node.key) {
+                <button
+                  type="button"
+                  class="correlacion__card"
+                  [attr.data-role]="roleOf(node.key)"
+                  [class.is-on]="node.key === pickedKey()"
+                  [class.is-path]="pathKeys().has(node.key)"
+                  (click)="pickNode(node.key)"
+                >
+                  <span class="correlacion__chip" [attr.data-role]="roleOf(node.key)">{{
+                    roleLabel(node.key)
+                  }}</span>
+                  <strong>{{ node.name }}</strong>
+                  <span>{{ node.kind }}</span>
+                </button>
+              }
+            </div>
+          </section>
+          @if (!last) {
+            <p class="correlacion__join">conecta con</p>
+          }
+        }
+      </div>
+
+      <aside class="correlacion__inspect">
+        @if (inspector(); as detail) {
+          <header>
+            <span class="correlacion__chip" [attr.data-role]="detail.role">{{ detail.roleLabel }}</span>
+            <h2>{{ detail.node.name }}</h2>
+            <p>{{ detail.node.kind }} · {{ detail.siteLabel }}</p>
+          </header>
+          <p class="correlacion__why">{{ detail.implication }}</p>
+          <dl>
+            <div>
+              <dt>Clave</dt>
+              <dd>{{ detail.node.key }}</dd>
+            </div>
+            <div>
+              <dt>Fuente</dt>
+              <dd>{{ detail.node.source || '—' }}</dd>
+            </div>
+            <div>
+              <dt>Saltos a la causa</dt>
+              <dd>
+                @if (detail.hopsFromCause == null) {
+                  Sin camino
+                } @else if (detail.hopsFromCause === 0) {
+                  Es la causa
+                } @else {
+                  {{ detail.hopsFromCause }}
+                }
+              </dd>
+            </div>
+            <div>
+              <dt>Alcance (3 saltos)</dt>
+              <dd>{{ detail.reachCount }} equipos</dd>
+            </div>
+            @if (detail.node.lastSeenAt) {
+              <div>
+                <dt>Visto</dt>
+                <dd>{{ detail.node.lastSeenAt | date: 'short' }}</dd>
+              </div>
+            }
+          </dl>
+          <h3>Camino desde la causa</h3>
+          @if (detail.pathNodes.length) {
+            <ol class="correlacion__path">
+              @for (step of detail.pathNodes; track step.key) {
+                <li>
+                  <button type="button" class="correlacion__link" (click)="pickNode(step.key)">
+                    {{ step.name }}
+                  </button>
+                </li>
+              }
+            </ol>
+          } @else {
+            <p>Este nodo no tiene camino a la causa.</p>
+          }
+          <h3>Vecinos</h3>
+          @if (detail.neighbors.length) {
+            <ul>
+              @for (neighbor of detail.neighbors; track neighbor.key) {
+                <li>
+                  <button type="button" class="correlacion__link" (click)="pickNode(neighbor.key)">
+                    {{ neighbor.name }}
+                    <span>{{ neighbor.kind }}</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p>Sin vecinos persistidos.</p>
+          }
+          <h3>Alertas relacionadas</h3>
+          @if (detail.relatedAlerts.length) {
+            <ul>
+              @for (alert of detail.relatedAlerts; track alert.fingerprint) {
+                <li>{{ alert.name }} · {{ alert.severity }}</li>
+              }
+            </ul>
+          } @else {
+            <p>Ninguna alerta del incidente apunta a este nodo.</p>
+          }
+        } @else {
+          <eku-empty-state
+            title="Seleccione un equipo"
+            message="Pulse una tarjeta del árbol para ver vecinos, impacto y el camino hasta la causa."
+          />
+        }
+      </aside>
+    </div>
+  }
+</section>

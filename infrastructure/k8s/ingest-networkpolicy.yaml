@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingest-external
+  labels:
+    app.kubernetes.io/component: ingest
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: ingest
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 4317
+        - protocol: TCP
+          port: 4318
+        - protocol: TCP
+          port: 13133
+        - protocol: TCP
+          port: 8889
+        - protocol: TCP
+          port: 8081

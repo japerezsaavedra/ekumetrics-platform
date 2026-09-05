@@ -18,6 +18,7 @@ import { combineLatest, EMPTY, of, timer } from 'rxjs';
 import { API_BASE_URL } from '../../core/api';
 import { KioskService } from '../../core/kiosk';
 import { TenantService } from '../../core/tenant';
+import type { OptionalTenantModule } from '../../core/tenant-modules';
 import { ThemeService } from '../../core/theme';
 import { EkuChartComponent } from '../../shared/eku/chart/eku-chart';
 import { HomeChartAskComponent } from './home-chart-ask';
@@ -115,6 +116,15 @@ const MODULE_LABELS: Record<string, string> = {
 function moduleLabel(module: string): string {
   return MODULE_LABELS[module] ?? module;
 }
+
+const SECTION_MODULE: Partial<Record<DashSection, OptionalTenantModule>> = {
+  network: 'network',
+  databases: 'databases',
+  queues: 'queues',
+  icewarp: 'icewarp',
+  'icewarp-host': 'icewarp',
+  sap: 'sap',
+};
 
 const MODE_LABELS: Record<string, string> = {
   site: 'Servidor',
@@ -653,6 +663,16 @@ export class HomePage {
   });
 
   constructor() {
+    effect(() => {
+      if (this.kioskOn() || !this.tenants.ready()) {
+        return;
+      }
+      const required = SECTION_MODULE[this.section()];
+      if (required && !this.tenants.hasModule(required)) {
+        void this.router.navigate(['/hosts'], { replaceUrl: true });
+      }
+    });
+
     effect(() => {
       this.logQueryValue();
       this.logPage.set(1);

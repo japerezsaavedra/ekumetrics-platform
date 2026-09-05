@@ -1,16 +1,224 @@
 <section class="plataforma">
-  <eku-page-header title="E-Platform" subtitle="Estado del host, SLO, logs y traces.">
+  <eku-page-header title="E-Platform" subtitle="Estado del clúster Kubernetes, SLO, logs y traces.">
     @if (error(); as message) {
       <eku-error-state [message]="message" />
     }
-    <button ekuActions type="button" class="eku-add" (click)="reload()" [disabled]="refreshing()">
-      {{ refreshing() ? 'Actualizando…' : 'Actualizar' }}
-    </button>
+    <div ekuActions class="plataforma__actions">
+      <a routerLink="/investigacion" class="plataforma__text-action">Investigación</a>
+      <button type="button" class="eku-add" (click)="reload()" [disabled]="refreshing()">
+        {{ refreshing() ? 'Actualizando…' : 'Actualizar' }}
+      </button>
+    </div>
   </eku-page-header>
 
   @if (loading()) {
     <eku-loading-skeleton label="Cargando E-Platform" [bars]="6" />
   } @else if (data(); as view) {
+    <header class="plataforma__band-head">
+      <h2>Kubernetes</h2>
+    </header>
+    <section class="plataforma__hostbar" aria-label="Kubernetes">
+      <dl class="plataforma__facts">
+        <div>
+          <dt>Kubernetes</dt>
+          <dd>{{ view.cluster?.available ? 'Monitoreado' : 'Sin señal' }}</dd>
+        </div>
+        <div>
+          <dt>Versión kubelet</dt>
+          <dd>{{ view.cluster?.kubeletVersion || '—' }}</dd>
+        </div>
+        <div>
+          <dt>Nodos</dt>
+          <dd>
+            {{ view.cluster?.nodesReady ?? 0 }} / {{ view.cluster?.nodesTotal ?? 0 }} listos
+          </dd>
+        </div>
+        <div>
+          <dt>Namespace</dt>
+          <dd>{{ view.cluster?.namespace || 'ekumetrics' }}</dd>
+        </div>
+        <div>
+          <dt>Pods plataforma</dt>
+          <dd>{{ view.cluster?.platformPods?.running ?? 0 }} en curso</dd>
+        </div>
+      </dl>
+    </section>
+
+    <header class="plataforma__band-head">
+      <h2>Clúster</h2>
+    </header>
+    <div class="plataforma__kpis" aria-label="Clúster">
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="!!view.cluster?.available && view.cluster.nodesTotal > 0 && view.cluster.nodesReady === view.cluster.nodesTotal"
+        [class.is-crit]="!!view.cluster?.available && view.cluster.nodesTotal > 0 && view.cluster.nodesReady < view.cluster.nodesTotal"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">hub</mat-icon>
+            Nodos
+            <eku-help-tip [hint]="hints.cluster" />
+          </span>
+        </header>
+        <strong>{{ view.cluster?.nodesReady ?? 0 }}/{{ view.cluster?.nodesTotal ?? 0 }}</strong>
+        <p>listos en el clúster</p>
+      </article>
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="!!view.cluster?.available && (view.cluster.pods?.pending ?? 0) === 0 && (view.cluster.pods?.failed ?? 0) === 0"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">view_in_ar</mat-icon>
+            Pods
+          </span>
+        </header>
+        <strong>{{ view.cluster?.pods?.running ?? 0 }}</strong>
+        <p>en curso en el clúster</p>
+      </article>
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="!!view.cluster?.available && (view.cluster.pods?.pending ?? 0) === 0"
+        [class.is-warn]="(view.cluster?.pods?.pending ?? 0) > 0"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">hourglass_empty</mat-icon>
+            Pendientes
+          </span>
+        </header>
+        <strong>{{ view.cluster?.pods?.pending ?? 0 }}</strong>
+        <p>pods sin programar o arrancar</p>
+      </article>
+      <article
+        class="plataforma__kpi"
+        [class.is-ok]="!!view.cluster?.available && (view.cluster.pods?.failed ?? 0) === 0"
+        [class.is-crit]="(view.cluster?.pods?.failed ?? 0) > 0"
+      >
+        <header>
+          <span>
+            <mat-icon class="plataforma__glyph" aria-hidden="true">error</mat-icon>
+            Fallidos
+          </span>
+        </header>
+        <strong>{{ view.cluster?.pods?.failed ?? 0 }}</strong>
+        <p>pods en Failed</p>
+      </article>
+    </div>
+
+    @if (!view.cluster?.available) {
+      <eku-empty-state
+        title="Sin señal de Kubernetes"
+        message="E-Platform no recibe métricas de kube-state-metrics. El clúster no aparece hasta que Prometheus raspee el exportador."
+      />
+    } @else {
+      <div class="plataforma__split plataforma__split--cluster">
+        <section>
+          <header class="plataforma__section-head">
+            <h2>Nodos <eku-help-tip [hint]="hints.clusterNodes" /></h2>
+            <span>{{ view.cluster.nodes.length }}</span>
+          </header>
+          @if (view.cluster.nodes.length === 0) {
+            <eku-empty-state title="Sin nodos" message="kube-state-metrics no publicó kube_node_info." />
+          } @else {
+            <table class="plataforma__table">
+              <thead>
+                <tr>
+                  <th>Nodo</th>
+                  <th>Estado</th>
+                  <th>CPU</th>
+                  <th>Memoria</th>
+                  <th>Kubelet</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (node of view.cluster.nodes; track node.name) {
+                  <tr>
+                    <td>{{ node.name }}</td>
+                    <td>
+                      <span class="plataforma__level" [attr.data-level]="node.ready ? 'info' : 'error'">
+                        {{ node.ready ? (node.unschedulable ? 'Listo, no programable' : 'Listo') : 'No listo' }}
+                      </span>
+                    </td>
+                    <td>{{ pct(node.cpuUsed) }}</td>
+                    <td>{{ pct(node.memUsed) }}</td>
+                    <td>{{ node.kubeletVersion || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </section>
+        <section>
+          <header class="plataforma__section-head">
+            <h2>Cargas de la plataforma <eku-help-tip [hint]="hints.clusterWorkloads" /></h2>
+            <span>{{ view.cluster.workloads.length }}</span>
+          </header>
+          @if (view.cluster.workloads.length === 0) {
+            <eku-empty-state
+              title="Sin cargas"
+              message="No hay Deployments, DaemonSets ni StatefulSets en ekumetrics."
+            />
+          } @else {
+            <table class="plataforma__table">
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Nombre</th>
+                  <th>Listos</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of view.cluster.workloads; track item.kind + '/' + item.name) {
+                  <tr>
+                    <td>{{ item.kind }}</td>
+                    <td>{{ item.name }}</td>
+                    <td>
+                      <span
+                        class="plataforma__level"
+                        [attr.data-level]="item.ready >= item.desired && item.desired > 0 ? 'info' : 'error'"
+                      >
+                        {{ item.ready }}/{{ item.desired }}
+                      </span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </section>
+      </div>
+      @if (view.cluster.issues.length > 0) {
+        <section class="plataforma__issues">
+          <header class="plataforma__section-head">
+            <h2>Pods con problemas <eku-help-tip [hint]="hints.clusterIssues" /></h2>
+            <span>{{ view.cluster.issues.length }}</span>
+          </header>
+          <table class="plataforma__table">
+            <thead>
+              <tr>
+                <th>Pod</th>
+                <th>Motivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of view.cluster.issues; track item.pod + item.reason) {
+                <tr>
+                  <td>{{ item.pod }}</td>
+                  <td>
+                    <span class="plataforma__level" data-level="error">{{ item.reason }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </section>
+      }
+    }
+
+    <header class="plataforma__band-head">
+      <h2>Host y servicios</h2>
+    </header>
     <section class="plataforma__hostbar" aria-label="Host y servicios">
       <dl class="plataforma__facts">
         <div>
@@ -44,6 +252,9 @@
       </ul>
     </section>
 
+    <header class="plataforma__band-head">
+      <h2>SLO</h2>
+    </header>
     <div class="plataforma__kpis plataforma__kpis--slo" aria-label="SLO">
       <article
         class="plataforma__kpi"
@@ -99,7 +310,7 @@
         <header>
           <span>
             <mat-icon class="plataforma__glyph" aria-hidden="true">sensors</mat-icon>
-            Agentes al día
+            Recolectores al día
             <eku-help-tip [hint]="hints.freshness" />
           </span>
         </header>
@@ -128,6 +339,9 @@
       </article>
     </div>
 
+    <header class="plataforma__band-head">
+      <h2>Host</h2>
+    </header>
     <div class="plataforma__kpis" aria-label="Host">
       <article
         class="plataforma__kpi"
@@ -227,6 +441,9 @@
       </article>
     </div>
 
+    <header class="plataforma__band-head">
+      <h2>API</h2>
+    </header>
     <div class="plataforma__kpis plataforma__kpis--api" aria-label="API">
       <article class="plataforma__kpi">
         <header>
@@ -280,6 +497,9 @@
       </article>
     </div>
 
+    <header class="plataforma__band-head">
+      <h2>Series</h2>
+    </header>
     <div class="plataforma__charts">
       @if (hostChart(); as option) {
         <article class="plataforma__chart">
@@ -340,7 +560,7 @@
         @if (logRows().length === 0) {
           <eku-empty-state
             title="Sin logs todavía"
-            message="Alloy envía a Loki los contenedores ekumetrics-*. Aparecerán en cuanto haya salida."
+            message="Alloy envía a Loki los pods del namespace ekumetrics. Aparecerán en cuanto haya salida."
           />
         } @else if (filteredLogs().length === 0) {
           <eku-empty-state
@@ -469,34 +689,241 @@
       <section>
         <header class="plataforma__section-head">
           <h2>Traces <eku-help-tip [hint]="hints.traces" /></h2>
-          <span>{{ view.traces.length }}</span>
+          <span>{{ traceRangeLabel() }}</span>
         </header>
-        @if (view.traces.length === 0) {
+        <form class="plataforma__logs-toolbar" [formGroup]="tracesForm">
+          <label class="eku-field">
+            <span>Buscar</span>
+            <input type="search" formControlName="query" placeholder="operación, servicio o trace" />
+          </label>
+          <label class="eku-field">
+            <span>Operación</span>
+            <select formControlName="operation">
+              <option [ngValue]="'todas'">todas</option>
+              @for (name of traceOperations(); track name) {
+                <option [ngValue]="name">{{ name }}</option>
+              }
+            </select>
+          </label>
+          <label class="eku-field">
+            <span>Desde</span>
+            <input type="datetime-local" formControlName="from" />
+          </label>
+          <label class="eku-field">
+            <span>Hasta</span>
+            <input type="datetime-local" formControlName="to" />
+          </label>
+          <label class="eku-field">
+            <span>Registros</span>
+            <select formControlName="pageSize">
+              @for (size of logPageSizes; track size) {
+                <option [ngValue]="size">{{ size }}</option>
+              }
+            </select>
+          </label>
+        </form>
+        @if (traceRows().length === 0 && !openTrace()) {
           <eku-empty-state
             title="Sin traces todavía"
             message="La API envía OpenTelemetry a Tempo. Use el portal un momento y vuelva a actualizar."
           />
-        } @else {
-          <table class="plataforma__table">
+        } @else if (filteredTraces().length === 0 && !openTrace()) {
+          <eku-empty-state
+            title="Sin coincidencias"
+            message="Ningún trace coincide con la búsqueda o el filtro de operación."
+          />
+        } @else if (filteredTraces().length > 0) {
+          <table class="plataforma__table plataforma__table--logs">
             <thead>
               <tr>
-                <th>Servicio</th>
+                <th></th>
+                <th>Hora</th>
                 <th>Operación</th>
+                <th>Servicio</th>
                 <th>Duración</th>
                 <th>Trace</th>
               </tr>
             </thead>
             <tbody>
-              @for (trace of view.traces; track trace.traceId) {
-                <tr>
+              @for (trace of pagedTraces(); track trace.traceId) {
+                <tr
+                  class="plataforma__log"
+                  [class.is-open]="isTraceOpen(trace)"
+                  [class.is-error]="traceHasError(trace)"
+                >
+                  <td>
+                    <button
+                      type="button"
+                      class="plataforma__log-toggle"
+                      (click)="toggleTrace(trace)"
+                      [attr.aria-expanded]="isTraceOpen(trace)"
+                      [attr.aria-label]="isTraceOpen(trace) ? 'Cerrar trace' : 'Abrir trace'"
+                    >
+                      <mat-icon aria-hidden="true">{{
+                        isTraceOpen(trace) ? 'expand_less' : 'expand_more'
+                      }}</mat-icon>
+                    </button>
+                  </td>
+                  <td class="plataforma__log-time">
+                    {{ traceTs(trace) | date: 'yyyy-MM-dd HH:mm:ss.SSS' }}
+                  </td>
+                  <td>
+                    @for (part of highlightTrace(trace.rootTraceName || '—'); track $index) {
+                      @if (part.hit) {
+                        <mark>{{ part.value }}</mark>
+                      } @else {
+                        {{ part.value }}
+                      }
+                    }
+                  </td>
                   <td>{{ trace.rootServiceName || 'API' }}</td>
-                  <td>{{ trace.rootTraceName || '—' }}</td>
-                  <td>{{ trace.durationMs }} ms</td>
-                  <td>{{ trace.traceId.slice(0, 16) }}</td>
+                  <td>{{ formatDurationMs(trace.durationMs) }}</td>
+                  <td>{{ trace.traceId }}</td>
                 </tr>
+                @if (isTraceOpen(trace)) {
+                  <tr class="plataforma__log-detail">
+                    <td colspan="6">
+                      @if (openTrace(); as open) {
+                        <article class="plataforma__trace-view">
+                          <header class="plataforma__trace-view-head">
+                            <div>
+                              <h3>{{ open.rootTraceName || 'Trace' }}</h3>
+                              <p>
+                                {{ traceTs(open) | date: 'yyyy-MM-dd HH:mm:ss.SSS' }}
+                                · {{ open.rootServiceName || 'API' }}
+                                · {{ formatDurationMs(openTraceTimeline().durationMs || open.durationMs) }}
+                                · {{ open.traceId }}
+                              </p>
+                            </div>
+                          </header>
+                          @if (!isTraceLoaded(open)) {
+                            <p class="plataforma__span-event">Cargando línea de tiempo…</p>
+                          } @else {
+                            @if (openTraceTimeline(); as timeline) {
+                              @if (timeline.lanes.length === 0) {
+                                <p class="plataforma__span-event">Este trace no tiene spans.</p>
+                              } @else {
+                                <div class="plataforma__gantt-axis" aria-hidden="true">
+                                  <span class="plataforma__gantt-label">Span</span>
+                                  <span class="plataforma__gantt-ms">Inicio / dur.</span>
+                                  <span class="plataforma__gantt-track plataforma__gantt-track--axis">
+                                    @for (tick of timeline.ticks; track tick.left) {
+                                      <span class="plataforma__gantt-tick" [style.left.%]="tick.left">{{
+                                        tick.label
+                                      }}</span>
+                                    }
+                                  </span>
+                                </div>
+                                <div class="plataforma__gantt">
+                                  @for (lane of timeline.lanes; track lane.span.spanId || $index) {
+                                    <button
+                                      type="button"
+                                      class="plataforma__gantt-row"
+                                      [class.is-selected]="selectedSpan()?.spanId === lane.span.spanId"
+                                      [class.is-error]="lane.span.status === 'error'"
+                                      (click)="selectSpan(lane.span)"
+                                    >
+                                      <span
+                                        class="plataforma__gantt-label"
+                                        [style.paddingLeft.rem]="0.35 + lane.depth * 0.85"
+                                        [title]="lane.span.name"
+                                      >
+                                        {{ lane.span.name || 'span' }}
+                                      </span>
+                                      <span class="plataforma__gantt-ms">
+                                        <b>{{ formatDurationMs(lane.durationMs) }}</b>
+                                        <small>+{{ formatDurationMs(lane.offsetMs) }}</small>
+                                      </span>
+                                      <span class="plataforma__gantt-track">
+                                        <span
+                                          class="plataforma__gantt-bar"
+                                          [class.is-error]="lane.span.status === 'error'"
+                                          [style.left.%]="lane.left"
+                                          [style.width.%]="lane.width"
+                                        ></span>
+                                        @for (event of lane.events; track $index) {
+                                          <span
+                                            class="plataforma__gantt-mark"
+                                            [style.left.%]="event.left"
+                                            [title]="event.name"
+                                          ></span>
+                                        }
+                                      </span>
+                                    </button>
+                                  }
+                                </div>
+                                @if (selectedSpan(); as span) {
+                                  <div class="plataforma__span plataforma__span--selected">
+                                    <header>
+                                      <strong>{{ span.name || 'span' }}</strong>
+                                      <span>{{ spanMs(span) }}</span>
+                                      @if (span.status) {
+                                        <span
+                                          class="plataforma__level"
+                                          [attr.data-level]="span.status === 'error' ? 'error' : 'info'"
+                                        >
+                                          {{ span.status }}
+                                        </span>
+                                      }
+                                    </header>
+                                    <dl class="plataforma__log-pairs">
+                                      @if (span.spanId) {
+                                        <div>
+                                          <dt>span</dt>
+                                          <dd>{{ span.spanId }}</dd>
+                                        </div>
+                                      }
+                                      @if (span.startTimeUnixNano) {
+                                        <div>
+                                          <dt>inicio</dt>
+                                          <dd>{{ nanoTs(span.startTimeUnixNano) | date: 'yyyy-MM-dd HH:mm:ss.SSS' }}</dd>
+                                        </div>
+                                      }
+                                      @for (pair of spanPairs(span); track pair[0]) {
+                                        <div>
+                                          <dt>{{ pair[0] }}</dt>
+                                          <dd>{{ pair[1] }}</dd>
+                                        </div>
+                                      }
+                                    </dl>
+                                    @for (event of span.events ?? []; track $index) {
+                                      <div class="plataforma__span-event">
+                                        <p>
+                                          {{ event.ts | date: 'yyyy-MM-dd HH:mm:ss.SSS' }} ·
+                                          {{ event.name || 'evento' }}
+                                        </p>
+                                        @for (pair of eventPairs(event); track pair[0]) {
+                                          <p>{{ pair[0] }}: {{ pair[1] }}</p>
+                                        }
+                                      </div>
+                                    }
+                                  </div>
+                                }
+                              }
+                            }
+                          }
+                        </article>
+                      }
+                    </td>
+                  </tr>
+                }
               }
             </tbody>
           </table>
+          <div class="plataforma__pager">
+            <button type="button" class="eku-add" (click)="prevTracePage()" [disabled]="tracePageView() <= 1">
+              Anterior
+            </button>
+            <span>Página {{ tracePageView() }} de {{ tracePageCount() }}</span>
+            <button
+              type="button"
+              class="eku-add"
+              (click)="nextTracePage()"
+              [disabled]="tracePageView() >= tracePageCount()"
+            >
+              Siguiente
+            </button>
+          </div>
         }
       </section>
     </div>

@@ -131,6 +131,96 @@ paths:
           description: Certificado no coincidente o tenant, sitio o agente no registrado
         "413":
           description: Cuerpo superior al límite permitido
+  /v1/incidents/{id}/investigate:
+    post:
+      summary: Disparar investigación AIOps (AgentOrchestrator)
+      operationId: startIncidentInvestigation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Eku-Tenant
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                retry:
+                  type: boolean
+      responses:
+        "200":
+          description: Investigación creada o en curso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiopsInvestigation"
+        "409":
+          description: Ya hay una investigación en curso
+  /v1/incidents/{id}/investigation:
+    get:
+      summary: Última investigación AIOps del incidente
+      operationId: getIncidentInvestigation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: version
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Investigación o investigation null
+  /v1/incidents/{id}/investigation/findings:
+    get:
+      summary: AgentFindings de la última investigación
+      operationId: getIncidentInvestigationFindings
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de findings de AIOps Agents
+  /v1/incidents/{id}/investigation/retry:
+    post:
+      summary: Reintentar investigación (nueva version)
+      operationId: retryIncidentInvestigation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Nueva investigación
+        "409":
+          description: Investigación aún en curso
+  /v1/incidents/{id}/investigation/cancel:
+    post:
+      summary: Cancelar investigación en curso
+      operationId: cancelIncidentInvestigation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Investigación cancelada
   /v1/ai/status:
     get:
       summary: Servicios y modelos de IA configurados
@@ -702,6 +792,10 @@ components:
     EkmsEvent:
       type: object
       required: [timestamp, tenant_id, site_id, agent_id, signal, value, source]
+      description: >
+        Envelope del Ekumetrics Agent. Los campos AIOps (category, entity_type,
+        correlation_key, environment, trace_id, metadata) son opcionales; los
+        recolectores actuales siguen enviando solo el contrato original.
       properties:
         timestamp:
           type: string
@@ -730,6 +824,12 @@ components:
             - flow.bytes
             - flow.new
             - snmp.trap
+            - neighbor_observed
+            - metric.anomaly
+            - log.signal
+            - change.detected
+            - deploy.observed
+            - alert.received
         value:
           type: number
         unit:
@@ -745,6 +845,65 @@ components:
           additionalProperties:
             type: string
             maxLength: 512
+        category:
+          type: string
+          enum:
+            - ALERT
+            - METRIC_SIGNAL
+            - LOG_SIGNAL
+            - CHANGE
+            - DEPLOY
+            - ASSET
+            - NEIGHBOR
+            - FLOW
+            - TRAP
+        entity_type:
+          type: string
+          description: Tipo de entidad AIOps; si se omite se usa asset_type
+        correlation_key:
+          type: string
+        environment:
+          type: string
+          description: Si se omite se toma tags.environment cuando existe
+        trace_id:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/EkmsEventMetadata"
+    EkmsEventMetadata:
+      type: object
+      description: >
+        Bolsa JSON no indexada. Snake_case en el wire (como el resto del envelope).
+        No usar para tenant_id ni para campos que deban filtrarse.
+      additionalProperties: false
+      maxProperties: 32
+      properties:
+        labels:
+          type: object
+          maxProperties: 32
+          additionalProperties:
+            type: string
+            maxLength: 512
+        attributes:
+          type: object
+          maxProperties: 32
+          additionalProperties:
+            oneOf:
+              - type: string
+                maxLength: 512
+              - type: number
+              - type: boolean
+        baseline:
+          type: number
+        deviation:
+          type: number
+        anomaly_score:
+          type: number
+        metric_name:
+          type: string
+        entity_id:
+          type: string
+        span_id:
+          type: string
     IngestResult:
       type: object
       required: [status, received, accepted, duplicates]
@@ -761,3 +920,27 @@ components:
         duplicates:
           type: integer
           minimum: 0
+    AiopsInvestigation:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        incidentId:
+          type: string
+        status:
+          type: string
+        productStatus:
+          type: string
+          enum: [PENDING, RUNNING, PARTIAL, COMPLETED, FAILED, TIMEOUT, CANCELLED]
+        version:
+          type: integer
+        selectedAgents:
+          type: array
+          items:
+            type: string
+        synthesisSummary:
+          type: string
+        investigationResult:
+          type: object

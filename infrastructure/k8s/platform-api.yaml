@@ -1,0 +1,131 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform-api
+  labels:
+    app.kubernetes.io/name: platform-api
+    app.kubernetes.io/component: api
+spec:
+  selector:
+    app.kubernetes.io/name: platform-api
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-api
+  labels:
+    app.kubernetes.io/name: platform-api
+    app.kubernetes.io/component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-api
+        app.kubernetes.io/component: api
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: api
+          image: ekumetrics/platform-api:1.0.0
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: platform-config
+          env:
+            - name: PORT
+              value: "3000"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector:4318
+            - name: OTEL_SERVICE_NAME
+              value: ekumetrics-platform-api
+            - name: DATABASE_URL_FILE
+              value: /opt/ekumetrics/secrets/database_url
+            - name: KEYCLOAK_ADMIN_PASSWORD_FILE
+              value: /opt/ekumetrics/secrets/keycloak_admin_password
+            - name: INGEST_SHARED_KEY_FILE
+              value: /opt/ekumetrics/secrets/ingest_shared_key
+            - name: AGENT_EDGE_ASSERTION_KEY_FILE
+              value: /opt/ekumetrics/secrets/agent_edge_assertion_key
+            - name: KIOSK_TOKEN_SECRET_FILE
+              value: /opt/ekumetrics/secrets/kiosk_token_secret
+            - name: BFF_SESSION_SECRET_FILE
+              value: /opt/ekumetrics/secrets/bff_session_secret
+            - name: AI_SETTINGS_ENCRYPTION_KEY_FILE
+              value: /opt/ekumetrics/secrets/ai_settings_encryption_key
+            - name: HOLMES_UPSTREAM_KEY_FILE
+              value: /opt/ekumetrics/secrets/holmes_upstream_key
+            - name: ALERTMANAGER_CONFIG_PATH
+              value: /etc/alertmanager/alertmanager.yml
+          volumeMounts:
+            - name: secrets
+              mountPath: /opt/ekumetrics/secrets
+              readOnly: true
+            - name: alertmanager-config
+              mountPath: /etc/alertmanager
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: secrets
+          secret:
+            secretName: ekumetrics-secrets
+            defaultMode: 0444
+            items:
+              - key: database_url
+                path: database_url
+              - key: keycloak_admin_password
+                path: keycloak_admin_password
+              - key: ingest_shared_key
+                path: ingest_shared_key
+              - key: agent_edge_assertion_key
+                path: agent_edge_assertion_key
+              - key: kiosk_token_secret
+                path: kiosk_token_secret
+              - key: bff_session_secret
+                path: bff_session_secret
+              - key: ai_settings_encryption_key
+                path: ai_settings_encryption_key
+              - key: holmes_upstream_key
+                path: holmes_upstream_key
+        - name: alertmanager-config
+          persistentVolumeClaim:
+            claimName: alertmanager-config

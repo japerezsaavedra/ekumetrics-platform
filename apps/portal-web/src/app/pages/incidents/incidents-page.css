@@ -9,13 +9,34 @@
   gap: var(--eku-space-2);
 }
 
-.incidents__actions button {
+.incidents__text-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0 0.75rem;
+  border: 0;
+  background: transparent;
+  color: var(--eku-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.incidents__text-action:hover {
+  background: var(--eku-primary-muted);
+}
+
+.incidents__actions .eku-add {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
   min-width: 7.5rem;
   min-height: 2.5rem;
+}
+
+.incidents__tally {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .incidents__layout {
@@ -48,6 +69,7 @@
 
 .incidents__row.is-on {
   border-color: var(--eku-primary);
+  background: color-mix(in srgb, var(--eku-primary) 10%, var(--eku-surface));
 }
 
 .incidents__row span {
@@ -70,9 +92,21 @@
   margin: 0;
 }
 
+.incidents__detail h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
 .incidents__detail p,
 .incidents__detail dt {
   color: var(--eku-text-secondary);
+}
+
+.incidents__detail dt {
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .incidents__detail dl {
@@ -84,6 +118,7 @@
 
 .incidents__detail dd {
   margin: 0.25rem 0 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .incidents__detail ul {
